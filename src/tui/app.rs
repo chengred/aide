@@ -282,6 +282,86 @@ impl App {
         self.cursor_pos = 0;
         std::mem::take(&mut self.input)
     }
+
+    /// Add a system message to the chat
+    fn add_system_message(&mut self, content: String) {
+        self.messages.push(ChatBubble {
+            role: BubbleRole::System,
+            content,
+            tool_calls: Vec::new(),
+        });
+    }
+
+    /// Handle a slash command. Returns true if the command was handled.
+    fn handle_slash_command(&mut self, input: &str) -> bool {
+        let parts: Vec<&str> = input.splitn(3, ' ').collect();
+        let cmd = parts[0].to_lowercase();
+
+        match cmd.as_str() {
+            "/help" => {
+                let help = [
+                    "Slash Commands:",
+                    "  /help          Show this help",
+                    "  /clear         Reset the conversation context",
+                    "  /model <name>  Switch the current model",
+                    "  /provider <p>  Switch provider (openai, anthropic, deepseek, ollama)",
+                    "  /tools         List available tools",
+                    "  /models        List available models",
+                    "  /save          Save the current session",
+                    "  /exit, /quit   Exit RustCC",
+                ].join("\n");
+                self.add_system_message(help);
+                true
+            }
+            "/clear" | "/reset" => {
+                self.messages.clear();
+                self.token_count = 0;
+                self.turn_count = 0;
+                self.add_system_message("Session reset. Context cleared.".into());
+                true
+            }
+            "/model" => {
+                if parts.len() >= 2 {
+                    let model = parts[1].to_string();
+                    self.add_system_message(format!("Switched model to: {}", model));
+                    self.model = model;
+                } else {
+                    self.add_system_message(format!("Current model: {}\nUsage: /model <model-name>", self.model));
+                }
+                true
+            }
+            "/provider" => {
+                if parts.len() >= 2 {
+                    self.provider = parts[1].to_string();
+                    self.add_system_message(format!("Switched provider to: {}", self.provider));
+                } else {
+                    self.add_system_message(format!("Current provider: {}\nUsage: /provider <openai|anthropic|deepseek|ollama>", self.provider));
+                }
+                true
+            }
+            "/tools" => {
+                self.add_system_message("Available tools: read, write, edit, grep, glob, bash, webfetch, websearch, plan".into());
+                true
+            }
+            "/models" => {
+                self.add_system_message(format!("Current model: {} (provider: {})", self.model, self.provider));
+                true
+            }
+            "/save" => {
+                self.add_system_message("Session save triggered.".into());
+                // Send a save signal through the agent channel
+                if let Some(ref tx) = self.agent_tx {
+                    let _ = tx.send("__rustcc_save__".into());
+                }
+                true
+            }
+            "/exit" | "/quit" | "/q" => {
+                self.should_quit = true;
+                true
+            }
+            _ => false,
+        }
+    }
 }
 
 /// Run the TUI application
@@ -426,11 +506,15 @@ fn handle_input_event(ev: Event, app: &mut App) -> bool {
                                 app.input_char('\n');
                             } else if !app.input.trim().is_empty() {
                                 let msg = app.take_input();
-                                app.add_user_message(msg.clone());
-                                app.start_streaming();
-                                // Send to agent
-                                if let Some(ref tx) = app.agent_tx {
-                                    let _ = tx.send(msg);
+                                if msg.starts_with('/') && app.handle_slash_command(&msg) {
+                                    // Handled locally
+                                } else {
+                                    app.add_user_message(msg.clone());
+                                    app.start_streaming();
+                                    // Send to agent
+                                    if let Some(ref tx) = app.agent_tx {
+                                        let _ = tx.send(msg);
+                                    }
                                 }
                             }
                         }
