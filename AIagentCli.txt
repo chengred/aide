@@ -1,0 +1,441 @@
+AI Agent CLI 设计文档
+1. 项目概述
+1.1 项目目标
+设计并实现一款高性能、模块化的 AI Agent CLI 工具，借鉴 Claude Code 泄露源码中的核心设计思想，支持多种 LLM 后端（本地模型 + 云 API），提供交互式终端体验，具备代码理解、文件操作、工具调用等完善功能。
+
+Claude Code 的泄露源码（约 1900 个 TypeScript 文件，51.2 万行代码）展示了非常成熟的生产级 AI agent harness 架构，包括 REPL 启动、QueryEngine、工具注册、Slash 命令、权限系统和多层状态管理等。这些设计模式值得在新工具中借鉴并移植到 Rust 生态。
+
+1.2 核心理念
+理念	说明
+Rust Native	原生性能、内存安全，用 Rust 替代原版 TypeScript/Bun/React Ink 技术栈
+模型中立	支持本地模型（Ollama、GGUF）和云 API（OpenAI、Anthropic、DeepSeek、Gemini 等）的自由切换
+模块化	核心与工具解耦，token 计费、日志、加密等以中间件形式注入
+隐私优先	本地模型零数据离境，用户完全控制数据流向
+渐进增强	基础功能可在纯本地运行，高级功能（如多模型编排）可选使用云服务
+2. 系统架构
+2.1 总体架构图
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                          用户界面层                                   │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐ │
+│  │  REPL Loop  │  │ Slash Cmds  │  │   TUI       │  │ Stream View │ │
+│  │ (交互式循环) │  │ (斜杠命令)   │  │ (Ratatui)   │  │ (流式输出)   │ │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘ │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                        控制器层 (Controller)                         │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │                    Session Manager                             │  │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │  │
+│  │  │ Agent Loop   │  │ Context Mgmt │  │ Tool Executor│         │  │
+│  │  │ (Agent循环)   │  │ (上下文管理)  │  │ (工具执行)    │         │  │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘         │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                          服务层 (Services)                           │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
+│  │ QueryEngine  │  │ Model Router │  │  RAG Engine  │               │
+│  │ (查询引擎)    │  │ (模型路由)    │  │ (检索增强)    │               │
+│  └──────────────┘  └──────────────┘  └──────────────┘               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
+│  │  Planner     │  │  Memory      │  │ Permission   │               │
+│  │  (规划器)     │  │  (记忆系统)   │  │  (权限系统)   │               │
+│  └──────────────┘  └──────────────┘  └──────────────┘               │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                         基础设施层 (Infrastructure)                  │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
+│  │ LLM Provider │  │   File I/O   │  │   Shell      │               │
+│  │  (LLM提供商)  │  │  (文件操作)   │  │  (命令执行)   │               │
+│  └──────────────┘  └──────────────┘  └──────────────┘               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
+│  │ HTTP Client  │  │  Embedding   │  │ Vector Store │               │
+│  │  (HTTP客户端) │  │  (向量嵌入)   │  │ (向量存储)    │               │
+│  └──────────────┘  └──────────────┘  └──────────────┘               │
+└─────────────────────────────────────────────────────────────────────┘
+
+2.2 借鉴 Claude Code 的五种核心设计模式
+根据对泄露源码的分析，以下五种 Agent 设计模式尤其值得在 Rust 实现中借鉴：
+
+模式	说明	Rust 实现方案
+QueryEngine + 工具注册	自然语言输入经 QueryEngine 解析，匹配并调用注册的工具	基于 trait 的工具注册表，宏系统简化注册过程
+Agent Loop（规划-行动-观察）	规划工具、子代理和详细提示词使 Agent 能处理长期复杂任务	实现 plan() → action() → observe() 循环，支持检查点恢复
+计划工具（Todo List）	虚拟工具调用作为上下文工程策略，帮助 Agent 保持方向	实现 PlanTool（空操作），输出结构化计划供 Agent 参照
+子代理（Sub Agent）	将复杂任务拆解，通过子代理深入处理特定任务	基于 tokio task 设计子代理生命周期管理，互斥隔离上下文
+上下文压缩与记忆管理	会话压缩和长期记忆存储，KAIROS 后台守护机制包含"dream"内存整理	实现滑动窗口 + 摘要压缩的双层机制
+2.3 技术选型优势
+Rust 原生替代原版 Claude Code 的 TypeScript/Bun/React Ink 技术栈，带来以下优势：
+
+性能：零成本抽象，启动速度和内存占用远超 Node.js 运行时
+
+并发：tokio 异步运行时，原生支持 agent loop 中的并发工具调用
+
+类型安全：编译时杜绝运行时类型错误，提升 agent 系统的健壮性
+
+生态工具：Ratatui 用于 TUI、candle 用于原生推理，均为成熟的 Rust 生态选择
+
+3. 核心组件与模块划分
+3.1 模块结构
+
+src/
+├── main.rs                 # 入口，CLI 参数解析，初始化
+├── cli/
+│   ├── mod.rs              # CLI 命令行接口（Clap）
+│   └── commands/           # 子命令（chat, run, config, mcp, subagent）
+├── tui/                    # 终端用户界面（Ratatui）
+│   ├── app.rs              # 主应用状态和事件循环
+│   ├── widgets/            # UI 组件（消息列表、输入栏、工具执行视图）
+│   └── themes.rs           # 主题配置
+├── agent/
+│   ├── mod.rs              # Agent 核心引擎
+│   ├── loop.rs             # Agent 循环（plan → action → observe）
+│   ├── planner.rs          # 规划器（任务分解与计划生成）
+│   ├── subagent.rs         # 子代理生命周期管理
+│   ├── memory/             # 记忆系统（长期/短期/工作记忆）
+│   └── context.rs          # 上下文管理与窗口压缩
+├── tools/                  # 工具系统
+│   ├── mod.rs              # 工具注册表和管理器
+│   ├── builtin/            # 内置工具（read, write, edit, grep, bash）
+│   ├── planning.rs         # 计划工具（no-op 规划工具）
+│   └── permission.rs       # 权限系统
+├── services/
+│   ├── query_engine.rs     # 查询引擎（意图解析与工具路由）
+│   ├── model_router.rs     # 模型路由器（任务分发给最佳模型）
+│   ├── rag.rs              # RAG 检索增强生成引擎
+│   └── mcp.rs              # MCP 服务器管理
+├── llm/                    # LLM 抽象层
+│   ├── provider.rs         # 统一 Trait 定义
+│   ├── openai.rs           # OpenAI API 客户端
+│   ├── anthropic.rs        # Anthropic/Claude API 客户端
+│   ├── deepseek.rs         # DeepSeek API 客户端
+│   ├── ollama.rs           # Ollama 本地后端
+│   └── candle.rs           # Candle 原生推理（可选）
+├── storage/                # 存储层
+│   ├── vector_store.rs     # 向量存储（用于代码语义检索）
+│   ├── config.rs           # 配置管理（TOML 格式）
+│   └── history.rs          # 会话历史持久化
+└── utils/                  # 工具函数
+    ├── logging.rs          # 结构化日志
+    ├── token_counter.rs    # Token 计数与计费（中间件）
+    └── encrypt.rs          # 加密中间件（API key 本地加密）
+	3.2 核心数据流
+	// 1. 用户输入 → QueryEngine
+// 2. QueryEngine → Planner（生成执行计划）
+// 3. Planner → Agent Loop
+//    - 每一步：模型推理 → 工具调用决策 → 工具执行 → 结果反馈
+// 4. 支持并发工具调用 + 检查点恢复
+
+4. 核心系统规范
+4.1 Agent Loop
+Agent Loop 是系统的核心执行引擎。模型收到用户请求，确定需要执行的操作并生成工具调用请求，模型接收工具执行结果后反复选择并调用下一个工具，直到 Agent 确定问题已解决并返回最终结果。
+
+工作步骤：
+
+解析用户 Prompt 转换为 Agent 任务
+
+构建系统提示和消息上下文
+
+发送给 LLM 推理，响应包含工具调用请求
+
+执行工具（权限检查后）返回结果
+
+将结果附加到上下文继续调用 LLM
+
+重复 3-5 直至出现 end_turn 或达到最大轮次
+
+返回最终输出
+
+循环终止条件包括：end_turn（正常完成）、tool_use（等待工具调用）、max_tokens（超限）和 refusal（安全拒绝）。
+
+4.2 工具系统
+参考泄露源码中的设计，采用三层工具架构：
+
+内置工具：Read/Write/Edit/Run/Grep/Glob 等文件操作和文本搜索工具
+
+权限系统：按工具类型和路径精细控制执行权限，危险操作需用户确认
+
+计划工具：作为上下文工程策略，不执行实际操作，仅用于让模型输出结构化计划。这种看似"无用"的设计，实际上对复杂任务长期执行时保持 Agent 方向感非常关键
+
+工具注册使用 Trait 系统：
+pub trait Tool: Send + Sync {
+    fn name(&self) -> &str;
+    fn description(&self) -> &str;
+    fn parameters(&self) -> serde_json::Value;  // JSON Schema
+    fn execute(&self, params: serde_json::Value) -> impl Future<Output = ToolResult>;
+}
+4.3 模型抽象层
+设计统一的 LLM Provider Trait，以支持灵活切换模型后端
+
+pub trait LLMProvider: Send + Sync {
+    async fn chat(&self, messages: &[Message], options: &ChatOptions) -> Result<ChatResponse>;
+    async fn stream(&self, messages: &[Message], options: &ChatOptions) -> impl Stream<Item = Result<ChatChunk>>;
+    fn models(&self) -> Vec<String>;
+    fn supports_tools(&self) -> bool;
+}
+
+// 支持的协议
+pub enum ProviderType {
+    OpenAI,      // 支持 DeepSeek 等 OpenAI 兼容格式
+    Anthropic,   // Claude API
+    Ollama,      // 本地模型
+    Candle,      // Rust 原生推理
+}
+
+方案支持四类模型接入：
+
+云 API：OpenAI（含 DeepSeek 兼容接口）、Anthropic Claude
+
+本地 API：Ollama（Ollama 本地模型服务器）
+
+原生推理：Candle（HuggingFace 模型直接 Rust 推理，可选）
+
+轻量推理：Shimmy（5MB 二进制，OpenAI 兼容 API）
+4.4 记忆与上下文管理
+借鉴 Claude Code 的多层状态管理，实现三层记忆架构：
+
+层级	内容	实现方式
+工作记忆	当前会话消息列表	Vec<Message> 滑动窗口
+短期记忆	工具调用结果、代码片段	摘要压缩 + 关键信息提取
+长期记忆	项目知识、历史决策	向量数据库 + RAG 检索
+上下文窗口压缩策略：
+
+当 token 计数超过阈值，触发压缩
+
+保留最近 N 轮完整对话
+
+将更早对话生成摘要，作为系统提示附加
+
+4.5 子代理系统
+借鉴 Claude Code 的子代理设计，可将复杂任务拆解给专用子代理：
+
+主代理分析任务复杂度
+
+如需拆分，创建隔离的子代理实例
+
+子代理拥有独立上下文，可调用受限工具集
+
+子代理完成后返回结果给主代理
+
+主代理整合结果继续执行
+
+子代理与主代理上下文隔离，避免互相污染，同时允许并行执行多个独立子任务。
+
+5. RAG 与代码检索
+5.1 技术方案
+组件	技术选型	说明
+向量嵌入	BGE-M3 / Sentence Embedder	中文代码友好的轻量 Embedding 模型
+向量存储	LanceDB / Qdrant（本地模式）	高性能的嵌入式向量数据库
+代码解析	tree-sitter-rust	多语言代码 AST 解析
+混合检索	BM25 + 语义检索	平衡精确匹配和语义理解
+5.2 RAG 工作流程
+用户查询
+    │
+    ▼
+查询意图分类（简单/复杂/代码查询）
+    │
+    ▼
+混合检索（BM25 + 向量）
+    │
+    ▼
+检索结果重排序（Reranker）
+    │
+    ▼
+上下文增强构建
+    │
+    ▼
+路由至对应模型处理
+
+该方法充分利用上下文增强。上下文级别越高，RAG 对代码生成任务的提升效果越显著，整体性能实现提升。
+
+6. 多模型编排
+借鉴 CogniRepo 和 CAMP 的多模型协同思想，实现查询复杂度 → 构建上下文 → 路由到最佳模型的自动编
+
+pub struct ModelRouter {
+    config: RouterConfig,
+}
+
+impl ModelRouter {
+    pub async fn route(&self, query: &str) -> ModelSelection {
+        // 1. 分析查询复杂度
+        let complexity = self.analyze_complexity(query);
+        
+        // 2. 根据复杂度选择模型
+        let selected = match complexity {
+            Complexity::Simple => ModelType::Fast,      // 本地小模型
+            Complexity::Complex => ModelType::Reasoner, // Claude/DeepSeek
+            Complexity::Code => ModelType::CodeGen,     // CodeLLama
+        };
+        
+        // 3. 构建上下文并路由
+        self.build_context(query, selected).await;
+        selected
+    }
+}
+
+路由策略
+查询类型	推荐模型	说明
+简单解释	本地小模型（Ollama）	快速响应，低成本
+深度推理	Claude / DeepSeek R1	复杂逻辑推理
+代码生成	CodeLLama / GPT-4	专注代码任务
+代码检索	本地 Embedding + BM25	不经过 LLM
+7. 终端用户界面（TUI）
+7.1 技术选型
+Ratatui 是 Rust 生态成熟的 TUI 开发库，以下项目已验证其可行性：
+
+参考项目	特点
+Claude Code Rust	原生 Rust Ratatui 替代品，连接 Agent SDK bridge
+Crustly	快速、内存高效的 TUI 编码助手
+rust_tui_coder	支持多 LLM 的 TUI 编码助手
+7.2 UI 结构
+┌─────────────────────────────────────────────────────────────┐
+│  欢迎提示 / 状态栏                                            │
+├─────────────────────────────────────────────────────────────┤
+│  用户: 请帮我优化 src/main.rs 中的错误处理                     │
+│                                                             │
+│  Agent: 正在分析 (🔍 使用 read_tool 读取文件...)              │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  📄 读取 src/main.rs                                  │   │
+│  │  建议添加 ? 运算符改进错误传播 ...                     │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+│  [File: src/main.rs]                                        │
+├─────────────────────────────────────────────────────────────┤
+│  > ________________________________________________________ │
+│  [Ctrl+C 退出] [Ctrl+Space 补全] [Esc 取消任务]             │
+└─────────────────────────────────────────────────────────────┘
+主消息区域：对话历史、模型响应和工具执行日志
+
+工具执行面板：展示正在执行的操作和结果（类似 Claude Code）
+
+输入区域：多行输入、历史记录、快捷命令
+
+状态栏：当前模型、Token 计数、处理状态、权限提示
+
+7.3 Slash 命令系统
+借鉴泄露源码中详细的斜杠命令设计，实现类似命令行模式的交互：
+
+命令	功能
+/model <name>	切换当前模型
+/local	切换到本地模式（零 API 调用）
+/tools	列出可用工具
+/allow <tool>	批准工具权限
+/rag	触发代码库检索
+/subagent <name>	调用预设子代理
+/reset	重置会话上下文
+/save	保存当前会话
+8. 技术选型汇总
+8.1 依赖库推荐
+模块	推荐库	说明
+CLI 框架	clap + derive	功能最完善的 Rust CLI 库
+TUI	ratatui + crossterm	成熟的 Rust TUI 框架
+异步运行时	tokio	Agent 并发必需
+HTTP 客户端	reqwest + tower	支持流式和中间件
+LLM 协议	llm-connector 或自研	统一 OpenAI/Anthropic/Ollama 接口
+序列化	serde + serde_json	JSON Schema 生成
+配置管理	toml + config	分层配置支持
+日志	tracing + tracing-subscriber	结构化日志
+向量存储	lance 或 qdrant-client	代码语义检索
+本地推理	candle 或 llama-cpp-rs	可选功能
+解析器组合	nom 或 winnow	自定义 DSL 解析
+测试	rstest + mockall	Agent 单元测试
+8.2 Rust 框架生态参考
+以下 Rust 框架可作为实现参考：
+
+框架	特点
+agent-core	提供 AgentConfig Trait，自动生成 TUI、会话管理、工具执行
+helios-engine	支持工具和聊天能力的 Rust LLM 框架
+kowalski	模块化 AI Agent 框架，包含 web 分析、代码分析和多 Agent 编排
+9. 开发路线图
+Phase 1: 核心骨架（2-3 周）
+项目初始化，Cargo workspace 配置
+
+基础 CLI 框架（clap + 子命令）
+
+简单 REPL 循环
+
+LLM Provider Trait 定义
+
+Ollama 本地后端实现
+
+OpenAI/Anthropic API 后端实现
+
+Phase 2: Agent 核心（2-3 周）
+Agent Loop 核心引擎
+
+Planner 规划模块
+
+基础工具系统（read_file, write_file, run_command）
+
+上下文管理与摘要压缩
+
+权限系统基础
+
+Phase 3: TUI 集成（2 周）
+Ratatui 界面搭建
+
+消息流实时展示
+
+工具执行可视化
+
+Slash 命令系统
+
+Phase 4: 高级功能（3 周）
+子代理系统
+
+RAG 代码检索（tree-sitter + 向量存储）
+
+多模型路由选择
+
+会话持久化与历史管理
+
+MCP 协议支持
+
+Phase 5: 打磨与发布（2 周）
+性能优化与内存压测
+
+配置系统完善（本地化/云端模式灵活切换）
+
+文档与示例
+
+测试覆盖（单元测试 + 集成测试）
+
+发布到 crates.io / Homebrew
+
+10. 安全与权限机制
+参考泄露代码中发现的权限系统，设计三层防护：
+
+层级	措施	说明
+工具白名单	allowed_tools 配置	默认禁用危险操作（网络、系统命令等）
+实时确认	高影响操作时触发权限请求	用户决定是否放行
+成本保护	Token 计数和预算限制	设置单次会话/API 调用的最大 token 上限
+沙盒环境	容器化为嵌套选项	高风险任务降级至 Docker 隔离执行
+此外，可参考泄露源码中的防蒸馏设计——对于云 API 模式提供可选的 fake_tools 注入机制防止训练数据被盗用。API Key 采用本地 AES 加密存储，日志中自动脱敏敏感信息。
+
+11. 可观测性与开发体验
+设计三个层面的可观测性：
+
+请求层：API 请求/响应 tracing，问题定位时可以精确到每一次 HTTP 通信
+
+Agent 层：Agent 循环内嵌 log_plan 和 log_action，可将 Planning 的决策序列渲染为结构化视图
+
+工具层：工具执行挂钩 OpenTelemetry，方便对接 Prometheus 进行长时间运行的分析
+
+用户体验方面，借鉴 Claude Code 经典设计提供以下辅助功能：
+
+交互式确认：高影响文件写入、删除操作时，在 TUI 底部展示 diff 差异和权限确认对话框
+
+检查点恢复：长时间 Agent 任务支持中断保存，下次执行可加载进度
+
+Token 计数器：在状态栏实时展示本轮对话 Token 消耗
+
+内嵌命令：快速切换模型、切换模式（高效推理 ↔ 深度思考）
+
+这套设计完整覆盖了从本地模型推理到云端 API、从简单对话到复杂 Agent 编排的多种场景，可灵活满足不同开发环境和隐私需求。
+

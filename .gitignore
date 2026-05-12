@@ -1,0 +1,6 @@
+/target
+.env
+*.swp
+*.swo
+key.txt
+.DS_Store
