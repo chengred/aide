@@ -8,6 +8,7 @@ use ratatui::{
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::agent::{AgentEvent, ConfirmationDetails, ConfirmationType};
+use crate::storage::settings::SettingsManager;
 use crate::tui::widgets;
 
 /// A chat message in the TUI
@@ -118,10 +119,19 @@ pub struct App {
     pub agent_tx: Option<UnboundedSender<String>>,
     /// Error message to display
     pub error_msg: Option<String>,
+    /// Permission tools allowed in this session
+    pub allowed_tools: Vec<String>,
+    /// Settings manager for persistence
+    settings_manager: SettingsManager,
 }
 
 impl App {
     pub fn new(model: String, provider: String) -> Self {
+        let settings_manager = SettingsManager::new().unwrap_or_else(|_| {
+            // Create with default paths as fallback
+            SettingsManager::new().unwrap()
+        });
+        let settings = settings_manager.load().unwrap_or_default();
         Self {
             messages: Vec::new(),
             input: String::new(),
@@ -138,6 +148,8 @@ impl App {
             agent_rx: None,
             agent_tx: None,
             error_msg: None,
+            allowed_tools: settings.permissions.allow,
+            settings_manager,
         }
     }
 
@@ -340,7 +352,17 @@ impl App {
                 true
             }
             "/tools" => {
-                self.add_system_message("Available tools: read, write, edit, grep, glob, bash, webfetch, websearch, plan".into());
+                let all_tools = ["read", "write", "edit", "grep", "glob", "bash", "webfetch", "websearch", "plan"];
+                let mut msg = String::from("Available tools:\n");
+                for t in &all_tools {
+                    let marker = if self.allowed_tools.contains(&t.to_string()) {
+                        " [auto-allowed]"
+                    } else {
+                        " [needs confirm]"
+                    };
+                    msg.push_str(&format!("  {}{}\n", t, marker));
+                }
+                self.add_system_message(msg);
                 true
             }
             "/models" => {
@@ -353,6 +375,37 @@ impl App {
                 if let Some(ref tx) = self.agent_tx {
                     let _ = tx.send("__rustcc_save__".into());
                 }
+                true
+            }
+            "/allow" => {
+                if parts.len() >= 2 {
+                    let tool = parts[1].to_string();
+                    if !self.allowed_tools.contains(&tool) {
+                        self.allowed_tools.push(tool.clone());
+                    }
+                    let _ = self.settings_manager.allow_tool(&tool);
+                    self.add_system_message(format!("Tool '{}' allowed for this session and persisted.", tool));
+                } else {
+                    self.add_system_message("Usage: /allow <tool-name>".into());
+                }
+                true
+            }
+            "/deny" => {
+                if parts.len() >= 2 {
+                    let tool = parts[1].to_string();
+                    self.allowed_tools.retain(|t| t != &tool);
+                    let _ = self.settings_manager.deny_tool(&tool);
+                    self.add_system_message(format!("Tool '{}' denied and persisted.", tool));
+                } else {
+                    self.add_system_message("Usage: /deny <tool-name>".into());
+                }
+                true
+            }
+            "/permissions" => {
+                let mut perms = String::from("Current permissions:\n");
+                perms.push_str(&format!("  Allowed tools: {}\n", self.allowed_tools.join(", ")));
+                perms.push_str(&format!("  Settings path: {}", self.settings_manager.user_settings_path().display()));
+                self.add_system_message(perms);
                 true
             }
             "/exit" | "/quit" | "/q" => {

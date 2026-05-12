@@ -13,20 +13,20 @@ use crate::llm::{
 };
 use crate::llm::ProviderType;
 use crate::storage::config::Config;
+use crate::storage::settings::SettingsManager;
 use crate::tools::permission::PermissionManager;
 use crate::tools::ToolRegistry;
 
 /// Manages a single chat session
 pub struct Session {
-    #[allow(dead_code)]
     config: Config,
     provider: Box<dyn LLMProvider>,
     agent: Agent,
-    #[allow(dead_code)]
     context_manager: ContextManager,
     messages: Vec<Message>,
     current_provider_type: ProviderType,
     current_model: String,
+    settings_manager: SettingsManager,
 }
 
 impl Session {
@@ -56,10 +56,30 @@ impl Session {
             tool_registry.register(crate::tools::planning::PlanTool::new());
         }
 
-        // Build permission manager from config
+        // Load persistent settings
+        let settings_manager = SettingsManager::new().unwrap_or_else(|_| {
+            // Fallback: create with default paths
+            SettingsManager::new().unwrap()
+        });
+        let settings = settings_manager.load().unwrap_or_default();
+
+        // Build permission manager from config + persistent settings
         let mut perm_manager = PermissionManager::new();
+        // Apply config allowlist
         for tool_name in &config.tools.allowed_tools {
             perm_manager.allow_tool(tool_name);
+        }
+        // Apply persistent settings allowlist
+        for tool_name in &settings.permissions.allow {
+            perm_manager.allow_tool(tool_name);
+        }
+        // Apply persistent settings denylist
+        for tool_name in &settings.permissions.deny {
+            perm_manager.block_tool(tool_name);
+        }
+        // Set allowed paths from settings
+        for path in &settings.permissions.additional_directories {
+            perm_manager.allow_path(path);
         }
 
         // Build agent config
@@ -91,6 +111,7 @@ impl Session {
             messages,
             current_provider_type: provider_type,
             current_model: model,
+            settings_manager,
         })
     }
 
