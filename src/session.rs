@@ -19,13 +19,16 @@ use crate::tools::ToolRegistry;
 
 /// Manages a single chat session
 pub struct Session {
+    #[allow(dead_code)]
     config: Config,
     provider: Box<dyn LLMProvider>,
     agent: Agent,
+    #[allow(dead_code)]
     context_manager: ContextManager,
     messages: Vec<Message>,
     current_provider_type: ProviderType,
     current_model: String,
+    #[allow(dead_code)]
     settings_manager: SettingsManager,
 }
 

@@ -201,7 +201,7 @@ impl LspClient {
     }
 
     /// Get or start a language server for the given file extension
-    async fn get_handle(&mut self, language: &str, file_ext: &str) -> Result<&mut LspHandle, String> {
+    async fn get_handle(&mut self, language: &str, _file_ext: &str) -> Result<&mut LspHandle, String> {
         if !self.handles.contains_key(language) {
             let config = match language {
                 "rust" => LspServerConfig {
@@ -231,7 +231,7 @@ impl LspClient {
                 _ => return Err(format!("No LSP server configured for language: {}", language)),
             };
 
-            let mut child = Command::new(&config.command)
+            let child = Command::new(&config.command)
                 .args(&config.args)
                 .stdin(std::process::Stdio::piped())
                 .stdout(std::process::Stdio::piped())
