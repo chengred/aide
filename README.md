@@ -17,17 +17,40 @@
 
 ## 快速开始
 
-### 安装
+### 安装（3 种方式）
 
+**方式1：下载预编译二进制（推荐，无需装 Rust）**
+
+从 [Releases](https://github.com/your-org/aide/releases) 下载对应平台的二进制：
 ```powershell
-# Windows PowerShell（一键安装）
-.\install.ps1
-
-# 或者手动
-cargo install --path .
+# Windows PowerShell
+Invoke-WebRequest -Uri "https://github.com/your-org/aide/releases/latest/download/aide-windows.exe" -OutFile "$env:USERPROFILE\.cargo\bin\aide.exe"
+```
+```bash
+# Linux
+curl -L https://github.com/your-org/aide/releases/latest/download/aide-linux -o ~/.cargo/bin/aide
+chmod +x ~/.cargo/bin/aide
+```
+```bash
+# macOS
+curl -L https://github.com/your-org/aide/releases/latest/download/aide-macos -o ~/.cargo/bin/aide
+chmod +x ~/.cargo/bin/aide
 ```
 
-安装后在任意目录输入 `aide` 即可使用。
+**方式2：从 crates.io 安装（需装 Rust）**
+
+```bash
+cargo install aide-cli
+```
+
+**方式3：从源码安装（需装 Rust）**
+
+```bash
+git clone https://github.com/your-org/aide.git
+cd aide
+.\install.ps1          # Windows
+# 或 cargo install --path .
+```
 
 ### 首次启动
 
