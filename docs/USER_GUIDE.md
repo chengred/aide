@@ -36,32 +36,6 @@ cargo install --path .
 
 安装完成后，直接在终端输入 `aide` 即可使用，无需带路径。
 
-编译完成后，二进制位于 `target/release/aide` (Linux/macOS) 或 `target\release\aide.exe` (Windows)。
-
-**直接运行（无需安装）**:
-
-```bash
-# Linux/macOS
-./target/release/aide config init
-
-# Windows PowerShell
-.\target\release\aide.exe config init
-```
-
-**添加到 PATH（可选，之后可直接打 aide）**:
-
-```bash
-# Linux/macOS
-sudo cp target/release/aide /usr/local/bin/
-
-# Windows PowerShell (永久)
-[Environment]::SetEnvironmentVariable("Path", $env:Path + ";D:\Projects\Aide\target\release", "User")
-# 重新打开终端后生效
-
-# Windows PowerShell (临时，仅当前窗口)
-$env:Path += ";D:\Projects\Aide\target\release"
-```
-
 ### 2.3 验证安装
 
 ```bash
@@ -135,11 +109,17 @@ show_tool_calls = true
 在配置中设置 `profile` 可快速切换运行模式:
 
 ```toml
+# DeepSeek 云端（默认）
+profile = "deepseek"
+
+# OpenAI GPT-4o 云端
+profile = "openai"
+
+# Anthropic Claude 云端
+profile = "anthropic"
+
 # 隐私优先：纯本地运行，零数据离境
 profile = "privacy-first"
-
-# 均衡模式：简单问题本地，复杂问题云端
-profile = "balanced"
 
 # 云端最大化：全部使用云端模型
 profile = "cloud-max"
@@ -206,10 +186,10 @@ Options:
 Commands:
   chat         交互式对话 (TUI)
   run          单次查询
-  config       配置管理
-  models       查看可用模型
-  tools        查看可用工具
-  history      会话历史管理
+  cfg|config   配置管理
+  list|models  查看可用模型
+  tool|tools   查看可用工具
+  hist|history 会话历史管理
   rag          代码检索 (RAG)
   mcp          MCP 服务器管理
   help         帮助信息

@@ -1,168 +1,121 @@
 # Aide — AI Agent CLI
 
-A high-performance, modular AI Agent CLI tool built in Rust. Supports multiple LLM backends, interactive TUI, and comprehensive tool-based agent execution for software engineering tasks.
+高性能、模块化的 AI Agent CLI 工具，Rust 实现。支持多种 LLM 后端、交互式 TUI、13 个内置工具。
 
-## Features
+## 特性
 
-- **Multi-Provider LLM**: OpenAI, Anthropic Claude, DeepSeek, and Ollama local models
-- **Interactive TUI**: Full Ratatui-based terminal interface with streaming output and tool visualization
-- **Agent Loop**: plan → action → observe cycle with automatic tool selection and execution
-- **Built-in Tools**: read, write, edit, grep, glob, and bash with permission control
-- **Model Router**: Automatic complexity analysis and routing to optimal model tier
-- **RAG Code Search**: Hybrid BM25 + semantic retrieval for codebase understanding
-- **Sub-agents**: Isolated parallel agents for complex task decomposition
-- **MCP Protocol**: JSON-RPC Model Context Protocol server support
-- **Session Persistence**: Save, load, export, and manage conversation history
-- **Privacy Modes**: Local-only, cloud, and hybrid operation modes
+- **多模型支持**: DeepSeek（默认）、OpenAI、Anthropic Claude、Ollama 本地模型
+- **交互式 TUI**: Ratatui 终端界面，流式输出，工具调用可视化
+- **Agent 循环**: plan → action → observe，自动工具选择与执行
+- **13 个内置工具**: read/write/edit/grep/glob/bash/webfetch/websearch/plan/lsp + task_create/task_update/task_list/task_get
+- **代码智能 (LSP)**: 跳转定义、查找引用、悬停信息、符号列表
+- **任务追踪**: 复杂任务自动拆解、状态管理、依赖追踪
+- **MCP 协议**: JSON-RPC 子进程管理，连接外部工具服务器
+- **权限系统**: 三级权限 (Allow/Confirm/Deny)，持久化到 settings.json
+- **斜杠命令**: /help /model /provider /allow /deny /permissions /clear /save /exit
+- **首次向导**: 7 步 TUI 设置向导，支持环境变量自动检测
 
-## Quick Start
+## 快速开始
 
-### Prerequisites
+### 安装
 
-- Rust toolchain 1.70+ (`rustup default stable`)
-- Optional: Ollama for local models
+```powershell
+# Windows PowerShell（一键安装）
+.\install.ps1
 
-### Install
-
-```bash
-# Clone and build
-git clone https://github.com/your-org/aide.git
-cd aide
-cargo build --release
-
-# The binary is at target/release/aide
+# 或者手动
+cargo install --path .
 ```
 
-### Configure
+安装后在任意目录输入 `aide` 即可使用。
 
-```bash
-# Initialize default configuration
-aide config init
+### 首次启动
 
-# Config is at:
-#   Linux:   ~/.config/aide/config.toml
-#   macOS:   ~/Library/Application Support/aide/config.toml
-#   Windows: %APPDATA%/aide/config.toml
+```powershell
+aide
 ```
 
-Edit the config to add your API keys:
+首次运行无配置文件时自动进入 7 步设置向导：选择主题 → 运行模式 → 提供商 → 粘贴 API Key → 选择模型 → 完成。
+
+如果设置了环境变量 `DEEPSEEK_API_KEY`（或 `ANTHROPIC_API_KEY`、`OPENAI_API_KEY`），会自动跳过向导。
+
+### 使用
+
+```powershell
+aide                    # 启动 TUI 交互模式
+aide run "问题描述"      # 单次非交互查询
+aide cfg init           # 初始化配置
+aide cfg show           # 查看当前配置
+aide list               # 查看可用模型
+aide tool               # 查看可用工具
+aide hist               # 会话历史
+aide rag index          # 索引代码库
+aide mcp list           # MCP 服务器列表
+```
+
+旧命令名兼容：`config`/`models`/`tools`/`history` 仍可使用。
+
+### TUI 快捷键
+
+| 键 | 操作 |
+|---|------|
+| `Enter` | 发送消息 |
+| `Shift+Enter` | 换行 |
+| `Ctrl+C` | 退出 |
+| `Esc` | 取消 Agent |
+| `↑` `↓` | 滚动历史 |
+| `Y` / `N` | 确认弹窗中批准/拒绝 |
+
+### 斜杠命令
+
+| 命令 | 功能 |
+|------|------|
+| `/help` | 帮助 |
+| `/model <name>` | 切换模型 |
+| `/provider <p>` | 切换提供商 |
+| `/allow <tool>` | 永久允许工具 |
+| `/deny <tool>` | 永久拒绝工具 |
+| `/permissions` | 查看权限 |
+| `/clear` | 重置上下文 |
+| `/save` | 保存会话 |
+| `/exit` | 退出 |
+
+### 配置
 
 ```toml
+# aide.toml
 [general]
-default_provider = "openai"
-default_model = "gpt-4o"
+default_provider = "deepseek"
+default_model = "deepseek-chat"
 
-[providers.openai]
-api_key = "sk-..."
-model = "gpt-4o"
+# 快速切换预设
+profile = "deepseek"       # deepseek / openai / anthropic / privacy-first / cloud-max
 
-[providers.anthropic]
-api_key = "sk-ant-..."
-model = "claude-sonnet-4-6"
-
-[providers.ollama]
-base_url = "http://localhost:11434"
-model = "codellama"
+[providers.deepseek]
+api_key = "sk-xxx"
+model = "deepseek-chat"
 ```
 
-Pre-built profiles are available:
-
-```bash
-# Edit config.toml and set:
-profile = "privacy-first"   # Local only, zero cloud
-profile = "balanced"         # Hybrid local + cloud
-profile = "cloud-max"        # Maximum cloud capability
-```
-
-### Usage
-
-```bash
-# Start interactive TUI session (default)
-aide
-
-# Start with specific provider and model
-aide -p anthropic -m claude-sonnet-4-6 chat
-
-# Single-shot query
-aide run "explain the error handling in src/main.rs"
-
-# Index code for RAG search
-aide rag index
-
-# View available tools
-aide tools
-
-# Manage session history
-aide history
-
-# List MCP servers
-aide mcp list
-```
-
-### TUI Controls
-
-| Key | Action |
-|-----|--------|
-| `Enter` | Send message |
-| `Shift+Enter` | New line |
-| `Ctrl+C` | Quit |
-| `Esc` | Cancel agent |
-| `↑` / `↓` | Scroll history |
-| `PgUp` / `PgDn` | Page scroll |
-| `Home` / `End` | Line start/end |
-
-### Slash Commands (in TUI)
-
-| Command | Description |
-|---------|-------------|
-| `/help` | Show help |
-| `/model <name>` | Switch model |
-| `/provider <p>` | Switch provider |
-| `/tools` | List available tools |
-| `/clear` | Reset context |
-| `/save` | Save session |
-
-## Architecture
+## 架构
 
 ```
 src/
-├── agent/       # Agent engine, planner, context, memory, subagents
-├── cli/         # Clap CLI definitions
-├── llm/         # LLM abstraction (OpenAI, Anthropic, DeepSeek, Ollama)
-├── services/    # Model router, RAG engine, MCP protocol
-├── session.rs   # Session manager (TUI + REPL)
-├── storage/     # Config management, session history
-├── tools/       # Tool registry + 6 builtin tools + permissions
-└── tui/         # Ratatui terminal UI
+├── agent/       # Agent 引擎 (loop, planner, context, memory, subagent)
+├── cli/         # CLI 定义
+├── llm/         # LLM 抽象 (OpenAI/Anthropic/DeepSeek/Ollama)
+├── services/    # ModelRouter, RagEngine, McpProtocol, LspClient
+├── session.rs   # 会话管理
+├── storage/     # Config, History, Settings
+├── tools/       # 13 个内置工具 + 权限系统
+├── tui/         # Ratatui 界面 + widgets
+└── utils/       # Token 计数器
 ```
 
-### Design Patterns
-
-- **Agent Loop**: plan → action → observe, inspired by Claude Code's architecture
-- **Tool System**: Trait-based async tool registry with JSON Schema generation
-- **Permissions**: Three-tier (Allow/Confirm/Deny) with path-based filtering
-- **Context Management**: Sliding window + summary compression
-- **Three-tier Memory**: Working (session), Short-term (summaries), Long-term (RAG)
-
-## Running Tests
+## 测试
 
 ```bash
-cargo test                    # All tests
-cargo test -- --nocapture     # With output
-cargo test -p aide agent    # Specific module
+cargo test          # 50 个测试
 ```
-
-## Release Build
-
-```bash
-cargo build --release         # Optimized with LTO, single codegen unit
-```
-
-Release profile is configured in Cargo.toml with:
-- LTO (Link-Time Optimization)
-- Single codegen unit
-- Stripped symbols
-- Abort on panic
 
 ## License
 
