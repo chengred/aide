@@ -48,13 +48,9 @@ impl Session {
 
         let provider = create_provider(&config, &provider_type, &model)?;
 
-        // Build tool registry with all builtin tools
+        // Build tool registry with all builtin tools (includes plan + task tools)
         let mut tool_registry = ToolRegistry::new();
         crate::tools::builtin::register_all(&mut tool_registry);
-        // Register planning tool when enabled
-        if config.general.enable_planning.unwrap_or(true) {
-            tool_registry.register(crate::tools::planning::PlanTool::new());
-        }
 
         // Load persistent settings
         let settings_manager = SettingsManager::new().unwrap_or_else(|_| {

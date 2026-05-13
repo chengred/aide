@@ -1,11 +1,12 @@
-pub mod read;
-pub mod write;
-pub mod edit;
-pub mod grep;
-pub mod glob;
 pub mod bash;
+pub mod edit;
+pub mod glob;
+pub mod grep;
+pub mod read;
+pub mod task;
 pub mod webfetch;
 pub mod websearch;
+pub mod write;
 
 use super::ToolRegistry;
 
@@ -20,4 +21,6 @@ pub fn register_all(registry: &mut ToolRegistry) {
     registry.register(webfetch::WebFetchTool::new());
     registry.register(websearch::WebSearchTool::new());
     registry.register(super::planning::PlanTool::new());
+    // Register task tracking tools (shared store across all 4 tools)
+    task::register_all(registry);
 }
