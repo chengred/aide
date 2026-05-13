@@ -64,11 +64,10 @@ impl SetupWizard {
             Step::Theme => Step::Mode,
             Step::Mode => {
                 if self.mode == "local" { Step::LocalUrl }
-                else if self.mode == "hybrid" {
-                    // Set defaults for both
-                    self.provider = "openai".into();
+                else {
+                    self.provider = "deepseek".into();
                     Step::CloudProvider
-                } else { Step::CloudProvider }
+                }
             }
             Step::CloudProvider => Step::CloudApiKey,
             Step::CloudApiKey => {
@@ -272,7 +271,7 @@ fn handle_setup_input(ev: Event, wizard: &mut SetupWizard) {
                 Step::CloudProvider => {
                     match key.code {
                         KeyCode::Char('1') => {
-                            wizard.provider = "openai".into();
+                            wizard.provider = "deepseek".into();
                             wizard.next_step();
                         }
                         KeyCode::Char('2') => {
@@ -280,7 +279,7 @@ fn handle_setup_input(ev: Event, wizard: &mut SetupWizard) {
                             wizard.next_step();
                         }
                         KeyCode::Char('3') => {
-                            wizard.provider = "deepseek".into();
+                            wizard.provider = "openai".into();
                             wizard.next_step();
                         }
                         KeyCode::Esc | KeyCode::Backspace => wizard.prev_step(),
@@ -556,10 +555,10 @@ fn cloud_provider_content(wizard: &SetupWizard) -> Text<'static> {
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled(format!("{} 1. OpenAI", prefix(wizard.provider == "openai")), style_for(wizard.provider == "openai")),
+            Span::styled(format!("{} 1. DeepSeek", prefix(wizard.provider == "deepseek")), style_for(wizard.provider == "deepseek")),
         ]),
         Line::from(vec![
-            Span::styled("     GPT-4o, GPT-4o-mini, GPT-4-turbo", Style::default().fg(Color::DarkGray)),
+            Span::styled("     DeepSeek-Chat, DeepSeek-Reasoner (OpenAI-compatible)", Style::default().fg(Color::DarkGray)),
         ]),
         Line::from(""),
         Line::from(vec![
@@ -570,10 +569,10 @@ fn cloud_provider_content(wizard: &SetupWizard) -> Text<'static> {
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled(format!("{} 3. DeepSeek", prefix(wizard.provider == "deepseek")), style_for(wizard.provider == "deepseek")),
+            Span::styled(format!("{} 3. OpenAI", prefix(wizard.provider == "openai")), style_for(wizard.provider == "openai")),
         ]),
         Line::from(vec![
-            Span::styled("     DeepSeek-Chat, DeepSeek-Reasoner (OpenAI-compat)", Style::default().fg(Color::DarkGray)),
+            Span::styled("     GPT-4o, GPT-4o-mini, GPT-4-turbo", Style::default().fg(Color::DarkGray)),
         ]),
     ])
 }

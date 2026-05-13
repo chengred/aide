@@ -46,8 +46,8 @@ fn default_enable_planning() -> Option<bool> {
 impl Default for GeneralConfig {
     fn default() -> Self {
         Self {
-            default_provider: ProviderType::OpenAI,
-            default_model: "gpt-4o".into(),
+            default_provider: ProviderType::DeepSeek,
+            default_model: "deepseek-chat".into(),
             system_prompt: Some(
                 "You are a helpful AI coding assistant. You help users with software engineering tasks."
                     .into(),
@@ -164,6 +164,31 @@ impl Config {
     /// Apply a named profile preset
     pub fn apply_profile(&mut self, profile: &str) {
         match profile {
+            "deepseek" => {
+                self.mode = Some(OperationMode::Cloud);
+                self.general.default_provider = ProviderType::DeepSeek;
+                self.general.default_model = "deepseek-chat".into();
+                self.general.system_prompt = Some(
+                    "You are a helpful AI coding assistant powered by DeepSeek.".into()
+                );
+            }
+            "openai" => {
+                self.mode = Some(OperationMode::Cloud);
+                self.general.default_provider = ProviderType::OpenAI;
+                self.general.default_model = "gpt-4o".into();
+                self.general.token_budget = Some(200_000);
+                self.general.system_prompt = Some(
+                    "You are a helpful AI coding assistant powered by OpenAI.".into()
+                );
+            }
+            "anthropic" => {
+                self.mode = Some(OperationMode::Cloud);
+                self.general.default_provider = ProviderType::Anthropic;
+                self.general.default_model = "claude-sonnet-4-6".into();
+                self.general.system_prompt = Some(
+                    "You are a helpful AI coding assistant powered by Anthropic Claude.".into()
+                );
+            }
             "privacy-first" => {
                 self.mode = Some(OperationMode::Local);
                 self.general.default_provider = ProviderType::Ollama;
@@ -174,14 +199,6 @@ impl Config {
                 self.tools.require_approval = vec!["bash".into(), "run".into(), "write".into(), "edit".into()];
                 self.general.system_prompt = Some(
                     "You are a privacy-first AI coding assistant running fully offline. Your data never leaves this machine.".into()
-                );
-            }
-            "balanced" => {
-                self.mode = Some(OperationMode::Hybrid);
-                self.general.default_provider = ProviderType::Anthropic;
-                self.general.default_model = "claude-sonnet-4-6".into();
-                self.general.system_prompt = Some(
-                    "You are a helpful AI coding assistant. Use local models for simple queries and cloud models for complex reasoning.".into()
                 );
             }
             "cloud-max" => {
