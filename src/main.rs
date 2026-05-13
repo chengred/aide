@@ -174,7 +174,7 @@ async fn main() -> Result<(), anyhow::Error> {
             }
         }
         None => {
-            // Check env vars first, then config files, then offer quick setup
+            // Check env vars first, then config files, then offer setup wizard
             let config_exists = storage::config::Config::exists(cli.config.as_deref());
 
             if !config_exists {
@@ -183,16 +183,13 @@ async fn main() -> Result<(), anyhow::Error> {
                     config.save()?;
                     println!("\n已从环境变量自动配置！启动 RustCC...\n");
                 } else {
-                    // Simple text-based quick setup
-                    println!();
-                    println!("{}", "  RustCC — AI Agent CLI".bright_green().bold());
-                    println!();
-                    match quick_setup() {
-                        Ok(config) => {
+                    // Full TUI setup wizard
+                    match tui::run_setup()? {
+                        Some(config) => {
                             config.save()?;
                             println!("\n配置已保存！启动 RustCC...\n");
                         }
-                        Err(_) => {
+                        None => {
                             println!("\n设置已取消。运行 'rustcc cfg init' 可随时配置。");
                             return Ok(());
                         }
@@ -245,99 +242,6 @@ fn try_auto_config() -> Option<storage::config::Config> {
     }
 
     None
-}
-
-/// Simple text-based quick setup (no full-screen TUI)
-fn quick_setup() -> Result<storage::config::Config, anyhow::Error> {
-    use std::io::{self, Write};
-    use storage::config::{Config, DeepSeekConfig, OpenAIConfig, AnthropicConfig, OllamaConfig};
-    use llm::ProviderType;
-
-    println!("  首次使用需要配置 LLM 提供商和 API Key。");
-    println!();
-    println!("  选择提供商:");
-    println!("    1. DeepSeek  (默认)");
-    println!("    2. Anthropic (Claude)");
-    println!("    3. OpenAI   (GPT-4o)");
-    println!("    4. Ollama   (本地模型)");
-    print!("  [1-4, 回车确认]: ");
-    io::stdout().flush()?;
-
-    let mut choice = String::new();
-    io::stdin().read_line(&mut choice)?;
-    let choice = choice.trim();
-
-    let (provider_type, provider_name) = match choice {
-        "2" => (ProviderType::Anthropic, "Anthropic"),
-        "3" => (ProviderType::OpenAI, "OpenAI"),
-        "4" => (ProviderType::Ollama, "Ollama"),
-        _ => (ProviderType::DeepSeek, "DeepSeek"),
-    };
-
-    let mut config = Config::default();
-
-    if provider_type == ProviderType::Ollama {
-        print!("  Ollama 地址 [http://localhost:11434]: ");
-        io::stdout().flush()?;
-        let mut url = String::new();
-        io::stdin().read_line(&mut url)?;
-        let url = url.trim();
-        let url = if url.is_empty() { "http://localhost:11434" } else { url };
-
-        print!("  模型名称 [codellama]: ");
-        io::stdout().flush()?;
-        let mut model = String::new();
-        io::stdin().read_line(&mut model)?;
-        let model = model.trim();
-        let model = if model.is_empty() { "codellama" } else { model };
-
-        config.providers.ollama = Some(OllamaConfig {
-            base_url: url.to_string(),
-            model: model.to_string(),
-        });
-        config.general.default_provider = ProviderType::Ollama;
-        config.general.default_model = model.to_string();
-    } else {
-        print!("  {} API Key: ", provider_name);
-        io::stdout().flush()?;
-        let mut api_key = String::new();
-        io::stdin().read_line(&mut api_key)?;
-        let api_key = api_key.trim().to_string();
-
-        if api_key.is_empty() {
-            anyhow::bail!("API Key 不能为空");
-        }
-
-        let default_model = match provider_type {
-            ProviderType::Anthropic => "claude-sonnet-4-6",
-            ProviderType::OpenAI => "gpt-4o",
-            _ => "deepseek-chat",
-        };
-
-        print!("  模型名称 [{}]: ", default_model);
-        io::stdout().flush()?;
-        let mut model = String::new();
-        io::stdin().read_line(&mut model)?;
-        let model = model.trim();
-        let model = if model.is_empty() { default_model.to_string() } else { model.to_string() };
-
-        match provider_type {
-            ProviderType::DeepSeek => {
-                config.providers.deepseek = Some(DeepSeekConfig { api_key, model: model.clone() });
-            }
-            ProviderType::Anthropic => {
-                config.providers.anthropic = Some(AnthropicConfig { api_key, model: model.clone() });
-            }
-            ProviderType::OpenAI => {
-                config.providers.openai = Some(OpenAIConfig { api_key, base_url: None, model: model.clone() });
-            }
-            _ => {}
-        }
-        config.general.default_provider = provider_type;
-        config.general.default_model = model;
-    }
-
-    Ok(config)
 }
 
 fn index_directory(engine: &mut services::rag::RagEngine, path: &str) {
