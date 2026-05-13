@@ -212,7 +212,7 @@ impl McpClient {
             "params": {
                 "protocolVersion": "2024-11-05",
                 "capabilities": { "tools": {} },
-                "clientInfo": { "name": "rustcc", "version": "0.1.0" }
+                "clientInfo": { "name": "aide", "version": "0.1.0" }
             },
             "id": 0,
         });
@@ -317,7 +317,7 @@ impl McpManager {
     pub fn new() -> Result<Self, anyhow::Error> {
         let dir = dirs::config_dir()
             .ok_or_else(|| anyhow::anyhow!("config directory not found"))?
-            .join("rustcc");
+            .join("aide");
         std::fs::create_dir_all(&dir)?;
 
         let config_path = dir.join("mcp_servers.json");

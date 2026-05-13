@@ -142,9 +142,9 @@ impl Default for UiConfig {
 impl Config {
     /// Load config, checking multiple paths in order:
     /// 1. Custom path (from -c flag)
-    /// 2. ./rustcc.toml in current directory
+    /// 2. ./aide.toml in current directory
     /// 3. ./config.toml in current directory
-    /// 4. Global %APPDATA%/rustcc/config.toml
+    /// 4. Global %APPDATA%/aide/config.toml
     pub fn load(custom_path: Option<&str>) -> Result<Self, ConfigError> {
         let path = find_config_path(custom_path)?;
         if path.exists() {
@@ -158,7 +158,7 @@ impl Config {
 
             Ok(config)
         } else {
-            Err(ConfigError::NotFound("No config file found. Run 'rustcc cfg init' to create one.".into()))
+            Err(ConfigError::NotFound("No config file found. Run 'aide cfg init' to create one.".into()))
         }
     }
 
@@ -238,7 +238,7 @@ impl Config {
         matches!(self.mode, Some(OperationMode::Local))
     }
 
-    /// Save config to the default path (current dir rustcc.toml)
+    /// Save config to the default path (current dir aide.toml)
     pub fn save(&self) -> Result<(), ConfigError> {
         self.save_to_path(None)
     }
@@ -295,9 +295,9 @@ impl Config {
 
 /// Search for an existing config file, checking:
 /// 1. Custom path (from -c flag)
-/// 2. ./rustcc.toml
+/// 2. ./aide.toml
 /// 3. ./config.toml
-/// 4. Global %APPDATA%/rustcc/config.toml
+/// 4. Global %APPDATA%/aide/config.toml
 fn find_config_path(custom: Option<&str>) -> Result<PathBuf, ConfigError> {
     if let Some(path) = custom {
         let p = PathBuf::from(path);
@@ -308,7 +308,7 @@ fn find_config_path(custom: Option<&str>) -> Result<PathBuf, ConfigError> {
     }
 
     // Check local files
-    for local in &["rustcc.toml", "config.toml"] {
+    for local in &["aide.toml", "config.toml"] {
         let p = PathBuf::from(local);
         if p.exists() {
             return Ok(p);
@@ -318,14 +318,14 @@ fn find_config_path(custom: Option<&str>) -> Result<PathBuf, ConfigError> {
     // Fall back to global
     let global = dirs::config_dir()
         .ok_or_else(|| ConfigError::NotFound("config directory not found".into()))?
-        .join("rustcc")
+        .join("aide")
         .join("config.toml");
     Ok(global)
 }
 
 /// Find where to write a new config:
 /// 1. Custom path (directory must exist or be creatable)
-/// 2. Current directory (prefer ./rustcc.toml)
+/// 2. Current directory (prefer ./aide.toml)
 /// 3. Global config dir
 fn find_or_create_config_dir(custom: Option<&str>) -> Result<PathBuf, ConfigError> {
     if let Some(path) = custom {
@@ -335,13 +335,13 @@ fn find_or_create_config_dir(custom: Option<&str>) -> Result<PathBuf, ConfigErro
         }
         return Ok(p);
     }
-    Ok(PathBuf::from("rustcc.toml"))
+    Ok(PathBuf::from("aide.toml"))
 }
 
 fn config_dir_path() -> Result<PathBuf, ConfigError> {
     let dir = dirs::config_dir()
         .ok_or_else(|| ConfigError::NotFound("config directory not found".into()))?;
-    Ok(dir.join("rustcc").join("config.toml"))
+    Ok(dir.join("aide").join("config.toml"))
 }
 
 fn save_to(config: &Config, path: &PathBuf) -> Result<(), ConfigError> {

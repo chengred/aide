@@ -3,6 +3,6 @@
 *.swp
 *.swo
 key.txt
-rustcc.toml
+aide.toml
 config.toml
 .DS_Store

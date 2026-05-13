@@ -355,7 +355,7 @@ fn draw_setup(f: &mut Frame, wizard: &SetupWizard) {
         .borders(Borders::ALL)
         .border_style(border_style)
         .style(Style::default().bg(bg))
-        .title(" RustCC Setup Wizard ")
+        .title(" Aide Setup Wizard ")
         .title_style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
 
     let inner = block.inner(dialog_area);
@@ -446,11 +446,11 @@ fn welcome_content() -> Text<'static> {
     Text::from(vec![
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Welcome to RustCC!", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled("  Welcome to Aide!", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  RustCC is a high-performance AI Agent CLI tool.", Style::default().fg(Color::White)),
+            Span::styled("  Aide is a high-performance AI Agent CLI tool.", Style::default().fg(Color::White)),
         ]),
         Line::from(vec![
             Span::styled("  It helps with software engineering tasks using LLMs.", Style::default().fg(Color::Gray)),
@@ -692,7 +692,7 @@ fn done_content(wizard: &SetupWizard) -> Text<'static> {
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Config saved. Launching RustCC...", Style::default().fg(Color::Yellow)),
+            Span::styled("  Config saved. Launching Aide...", Style::default().fg(Color::Yellow)),
         ]),
     ])
 }

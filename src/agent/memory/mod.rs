@@ -70,7 +70,7 @@ impl MemoryStore {
     pub fn open() -> Result<Self, anyhow::Error> {
         let base_dir = dirs::config_dir()
             .ok_or_else(|| anyhow::anyhow!("config directory not found"))?
-            .join("rustcc")
+            .join("aide")
             .join("memory");
 
         std::fs::create_dir_all(&base_dir)?;
@@ -314,7 +314,7 @@ impl Default for MemoryStore {
     fn default() -> Self {
         Self::open().unwrap_or_else(|_| {
             // Fallback: create in temp dir
-            let dir = std::env::temp_dir().join("rustcc_memory");
+            let dir = std::env::temp_dir().join("aide_memory");
             std::fs::create_dir_all(&dir).ok();
             Self {
                 base_dir: dir,

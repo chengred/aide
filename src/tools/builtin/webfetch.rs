@@ -46,7 +46,7 @@ impl Tool for WebFetchTool {
         };
 
         let client = reqwest::Client::builder()
-            .user_agent("rustcc/0.1")
+            .user_agent("aide/0.1")
             .timeout(std::time::Duration::from_secs(30))
             .build()
             .map_err(|e| format!("Failed to create HTTP client: {}", e));

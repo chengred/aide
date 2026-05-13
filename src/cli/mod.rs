@@ -1,8 +1,8 @@
 use clap::{Parser, Subcommand};
 
-/// RustCC - 高性能模块化 AI Agent CLI 工具
+/// Aide - 高性能模块化 AI Agent CLI 工具
 #[derive(Parser, Debug)]
-#[command(name = "rustcc", version, about, long_about = None)]
+#[command(name = "aide", version, about, long_about = None)]
 pub struct Cli {
     /// 配置文件路径
     #[arg(short, long, global = true)]

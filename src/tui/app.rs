@@ -320,7 +320,7 @@ impl App {
                     "  /tools         List available tools",
                     "  /models        List available models",
                     "  /save          Save the current session",
-                    "  /exit, /quit   Exit RustCC",
+                    "  /exit, /quit   Exit Aide",
                 ].join("\n");
                 self.add_system_message(help);
                 true
@@ -373,7 +373,7 @@ impl App {
                 self.add_system_message("Session save triggered.".into());
                 // Send a save signal through the agent channel
                 if let Some(ref tx) = self.agent_tx {
-                    let _ = tx.send("__rustcc_save__".into());
+                    let _ = tx.send("__aide_save__".into());
                 }
                 true
             }

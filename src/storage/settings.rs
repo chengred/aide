@@ -186,7 +186,7 @@ fn merge_settings(base: &mut Settings, overlay: Settings) {
 fn user_settings_path() -> Result<PathBuf, anyhow::Error> {
     let dir = dirs::config_dir()
         .ok_or_else(|| anyhow::anyhow!("config directory not found"))?
-        .join("rustcc");
+        .join("aide");
     std::fs::create_dir_all(&dir)?;
     Ok(dir.join("settings.json"))
 }

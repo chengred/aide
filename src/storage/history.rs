@@ -25,7 +25,7 @@ impl HistoryManager {
     pub fn new() -> Result<Self, anyhow::Error> {
         let dir = dirs::data_dir()
             .ok_or_else(|| anyhow::anyhow!("data directory not found"))?
-            .join("rustcc")
+            .join("aide")
             .join("sessions");
         std::fs::create_dir_all(&dir)?;
         Ok(Self { sessions_dir: dir })

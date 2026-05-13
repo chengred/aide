@@ -17,7 +17,7 @@ async fn main() -> Result<(), anyhow::Error> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "rustcc=info".into()),
+                .unwrap_or_else(|_| "aide=info".into()),
         )
         .init();
 
@@ -45,7 +45,7 @@ async fn main() -> Result<(), anyhow::Error> {
                             println!("{}", toml_str);
                         }
                         Err(_) => {
-                            println!("No config found. Run 'rustcc cfg init' to create one.");
+                            println!("No config found. Run 'aide cfg init' to create one.");
                         }
                     }
                 }
@@ -53,16 +53,16 @@ async fn main() -> Result<(), anyhow::Error> {
                     let config = storage::config::Config::default();
                     if *local {
                         config.save()?;
-                        println!("配置已创建: rustcc.toml (当前目录)");
+                        println!("配置已创建: aide.toml (当前目录)");
                     } else {
                         config.save_global()?;
                         println!("配置已创建: {}",
-                            dirs::config_dir().unwrap().join("rustcc").join("config.toml").display());
+                            dirs::config_dir().unwrap().join("aide").join("config.toml").display());
                     }
-                    println!("编辑该文件填入 API Key，然后运行 rustcc 即可。");
+                    println!("编辑该文件填入 API Key，然后运行 aide 即可。");
                 }
                 Some(cli::ConfigAction::Set { .. }) => {
-                    println!("使用 'rustcc cfg init' 创建默认配置后，直接编辑配置文件即可。");
+                    println!("使用 'aide cfg init' 创建默认配置后，直接编辑配置文件即可。");
                 }
             }
         }
@@ -143,12 +143,12 @@ async fn main() -> Result<(), anyhow::Error> {
                     println!("已索引 {} 个文档。", engine.len());
                 }
                 Some("search") => {
-                    println!("使用 'rustcc' 启动后在对话中使用 RAG 搜索。");
+                    println!("使用 'aide' 启动后在对话中使用 RAG 搜索。");
                 }
                 _ => {
                     println!("RAG 命令:");
-                    println!("  rustcc rag index [path]  - 索引代码文件");
-                    println!("  rustcc rag search <关键词> - 搜索已索引的代码");
+                    println!("  aide rag index [path]  - 索引代码文件");
+                    println!("  aide rag search <关键词> - 搜索已索引的代码");
                 }
             }
         }
@@ -169,7 +169,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 }
                 _ => {
                     println!("MCP 命令:");
-                    println!("  rustcc mcp list   - 列出已配置的 MCP 服务器");
+                    println!("  aide mcp list   - 列出已配置的 MCP 服务器");
                 }
             }
         }
@@ -181,16 +181,16 @@ async fn main() -> Result<(), anyhow::Error> {
                 // Try to auto-configure from environment variables
                 if let Some(config) = try_auto_config() {
                     config.save()?;
-                    println!("\n已从环境变量自动配置！启动 RustCC...\n");
+                    println!("\n已从环境变量自动配置！启动 Aide...\n");
                 } else {
                     // Full TUI setup wizard
                     match tui::run_setup()? {
                         Some(config) => {
                             config.save()?;
-                            println!("\n配置已保存！启动 RustCC...\n");
+                            println!("\n配置已保存！启动 Aide...\n");
                         }
                         None => {
-                            println!("\n设置已取消。运行 'rustcc cfg init' 可随时配置。");
+                            println!("\n设置已取消。运行 'aide cfg init' 可随时配置。");
                             return Ok(());
                         }
                     }

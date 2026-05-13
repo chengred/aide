@@ -11,7 +11,7 @@ use crate::tui::app::{App, InputMode};
 /// Draw the top status bar
 pub fn draw_status_bar(f: &mut Frame, area: Rect, app: &App) {
     let left = Span::styled(
-        format!(" RustCC | {} | {}", app.provider, app.model),
+        format!(" Aide | {} | {}", app.provider, app.model),
         Style::default().fg(Color::White).bg(Color::Rgb(55, 55, 75)),
     );
     let mode_text = match app.input_mode {
