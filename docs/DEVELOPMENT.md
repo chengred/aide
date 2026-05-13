@@ -5,30 +5,33 @@
 RustCC 是一个用 Rust 实现的高性能、模块化 AI Agent CLI 工具。借鉴 Claude Code 的核心设计模式，支持多种 LLM 后端，提供交互式 TUI 终端体验和完整的 Agent 工具调用系统。
 
 **技术栈**: Rust 1.95 + tokio + ratatui + reqwest + clap
-**代码规模**: 30 个源文件，约 8000 行代码，20 个依赖
+**代码规模**: 45 个源文件，约 8000 行代码，20 个依赖
 
 ## 2. 架构总览
 
 ```
 ┌──────────────────────────────────────────────────────┐
 │                    用户界面层 (TUI)                    │
-│  Ratatui 终端界面 | 流式输出 | 工具可视化 | 按键处理  │
+│  Ratatui 终端界面 | 流式输出 | 工具可视化 | 斜杠命令  │
+│  widgets: status | messages | input                  │
 └────────────────────────┬─────────────────────────────┘
                          │ mpsc channel
 ┌────────────────────────▼─────────────────────────────┐
 │                  控制器层 (Session)                    │
 │  Session Manager | Agent Loop | Context Mgmt         │
+│  Slash Commands | Permission Management             │
 └────────────────────────┬─────────────────────────────┘
                          │
 ┌────────────────────────▼─────────────────────────────┐
 │                   服务层 (Services)                    │
-│  ModelRouter | RagEngine | McpProtocol               │
+│  ModelRouter | RagEngine | McpProtocol | LspClient   │
 └────────────────────────┬─────────────────────────────┘
                          │
 ┌────────────────────────▼─────────────────────────────┐
 │              基础设施层 (Infrastructure)               │
 │  LLM Providers | Tool System | File I/O | Shell      │
 │  OpenAI/Anthropic/DeepSeek/Ollama                    │
+│  Settings | Config | History                         │
 └──────────────────────────────────────────────────────┘
 ```
 
@@ -69,11 +72,12 @@ pub trait LLMProvider: Send + Sync {
 核心执行引擎，实现 plan → action → observe 循环。
 
 **Agent Loop 工作流程**:
-1. 构建系统提示 + 消息上下文 + 工具定义
+1. 构建系统提示（含记忆上下文 + 计划指令 + 活跃计划状态）
 2. 发送 LLM 推理请求
 3. 解析响应：
    - 文本内容 → 流式输出
    - 工具调用 → 权限检查 → 执行工具 → 结果回传
+   - plan 工具调用 → 解析为 ExecutionPlan → 注入后续上下文
 4. 循环直到 end_turn / max_turns / refusal
 
 **双模式执行**:
@@ -88,6 +92,10 @@ pub enum AgentEvent {
     ToolCallEnd { id, name, result, success }, // 工具调用完成
     AgentDone { content, turns, total_tokens }, // Agent 完成
     AgentError(String),             // 错误
+    ConfirmRequest {                // 权限确认请求
+        details: ConfirmationDetails,
+        response_tx: oneshot::Sender<bool>,
+    },
 }
 ```
 
@@ -99,12 +107,20 @@ pub enum AgentEvent {
 **上下文管理** (`context.rs`):
 - 滑动窗口: 保留最近 N 轮完整对话
 - 摘要压缩: 旧消息生成摘要附加到系统提示
-- Token 估算: 4 chars ≈ 1 token (粗略估计)
+- Token 估算: 基于模型的 token 计数器
 
 **规划器** (`planner.rs`):
-- `ExecutionPlan`: 结构化执行计划
+- `ExecutionPlan`: 结构化执行计划，含步骤列表
 - `PlanStep`: 单个步骤 (状态跟踪 + 依赖管理)
-- `PlanTool`: 上下文工程的 no-op 工具
+- `Planner`: 计划生成与解析
+- `format_plan_context()`: 生成表格化的计划状态并注入 Agent Loop
+- PlanTool 被 LLM 调用后，其结果自动解析为 ExecutionPlan 并追踪
+
+**记忆系统** (`memory/mod.rs`):
+- 四类记忆: User / Feedback / Project / Reference
+- 文件存储: YAML frontmatter 的 .md 文件
+- MEMORY.md 索引
+- 项目级 (`.claude/memory/`) 和用户级 (`~/.config/rustcc/memory/`) 双路径
 
 ### 3.3 工具系统 (`src/tools/`)
 
@@ -121,28 +137,64 @@ pub trait Tool: Send + Sync {
 }
 ```
 
-**内置工具 (6个)**:
-| 工具 | 功能 | 需确认 |
-|------|------|--------|
-| read | 读取文件 (支持分页/行号) | 否 |
-| write | 写入文件 (自动创建目录) | 是 |
-| edit | 精确字符串替换 | 是 |
-| grep | 正则搜索 (递归目录) | 否 |
-| glob | 文件模式匹配 | 否 |
-| bash | Shell命令执行 (超时控制) | 是 |
+**内置工具 (13个)**:
+| 工具 | 功能 | 需确认 | 备注 |
+|------|------|--------|------|
+| read | 读取文件 (支持分页/行号) | 否 | |
+| write | 写入文件 (自动创建目录) | 是 | |
+| edit | 精确字符串替换 | 是 | |
+| grep | 正则搜索 (递归目录) | 否 | |
+| glob | 文件模式匹配 | 否 | |
+| bash | Shell命令执行 | 是 | |
+| webfetch | 获取网页内容 | 是 | |
+| websearch | 网络搜索 | 否 | |
+| plan | 结构化计划工具 | 否 | 上下文工程，触发计划追踪 |
+| lsp | 代码智能 (定义跳转/引用/悬停/符号) | 否 | 需安装对应语言服务器 |
+| task_create | 创建任务 | 否 | 共享状态，4 工具联动 |
+| task_update | 更新任务状态/依赖 | 否 | |
+| task_list | 列出任务 (支持过滤) | 否 | |
+| task_get | 获取任务详情 | 否 | |
 
 **权限系统** (`permission.rs`):
 三层防护:
 1. **Allow**: 白名单工具 + 路径过滤
-2. **Confirm**: 高影响操作需用户确认
+2. **Confirm**: 高影响操作需用户确认（TUI 弹窗含 diff 预览）
 3. **Deny**: 黑名单工具 + 路径排除
 
-**规划工具** (`planning.rs`):
-PlanTool 是一个"空操作"工具，不执行实际动作。它的作用是让 LLM 输出结构化计划，作为上下文工程策略，帮助 Agent 在复杂长期任务中保持方向感。
+权限持久化通过 settings.json: 项目级 `.claude/settings.json` 覆盖用户级 `~/.config/rustcc/settings.json`。
+
+**斜杠命令** (TUI 内):
+| 命令 | 功能 |
+|------|------|
+| `/help` | 显示帮助 |
+| `/clear` | 重置会话上下文 |
+| `/model <name>` | 切换模型 |
+| `/provider <p>` | 切换提供商 |
+| `/tools` | 列出工具及权限状态 |
+| `/models` | 列出模型 |
+| `/allow <tool>` | 永久允许工具（持久化） |
+| `/deny <tool>` | 永久拒绝工具（持久化） |
+| `/permissions` | 查看当前权限 |
+| `/save` | 保存会话 |
+| `/exit` | 退出 |
 
 ### 3.4 TUI 界面 (`src/tui/`)
 
-基于 Ratatui 的全功能终端界面。
+基于 Ratatui 的全功能终端界面，已拆分为独立的 widget 组件。
+
+**组件结构**:
+```
+src/tui/
+├── app.rs          # App 状态 + 事件循环 + 输入处理
+├── mod.rs          # 模块声明
+├── setup.rs        # 首次设置向导
+├── themes.rs       # Theme 定义 (dark/light)
+└── widgets/
+    ├── mod.rs      # 重导出
+    ├── status.rs   # draw_status_bar
+    ├── messages.rs # draw_messages
+    └── input.rs    # draw_input + confirm dialog
+```
 
 **布局**:
 ```
@@ -164,6 +216,7 @@ PlanTool 是一个"空操作"工具，不执行实际动作。它的作用是让
 - 非阻塞 drain agent events (try_recv)
 - 50ms 轮询间隔 (处理中) / 200ms (正常)
 - Ctrl+C 退出, Esc 取消, ↑↓ 滚动
+- 斜杠命令在本地拦截处理，不发送给 Agent
 
 **通信模型**:
 ```
@@ -186,18 +239,43 @@ TUI (主线程)  ←──event_rx──   Agent Task (后台)
 
 **MCP 协议** (`mcp.rs`):
 - JSON-RPC 2.0 over stdio
-- 方法: initialize / tools/list / tools/call
-- 服务器配置持久化
+- 真实子进程管理 (tokio::process::Command)
+- 生命周期: spawn → initialize → initialized 通知 → tools/list → tools/call
+- 服务器配置持久化 (`~/.config/rustcc/mcp_servers.json`)
+- 优雅关闭 (kill_on_drop)
+
+**LSP 客户端** (`lsp.rs`):
+- 完整 LSP 协议实现，通过 stdio 与语言服务器通信
+- 支持: rust-analyzer, pyright, typescript-language-server, gopls
+- 操作: textDocument/definition, textDocument/references, textDocument/hover, textDocument/documentSymbol
+- LSP 头解析 (Content-Length) + JSON-RPC 请求/响应
+
+### 3.6 配置与存储 (`src/storage/`)
+
+**配置管理** (`config.rs`):
+- TOML 格式配置文件
+- 多 Provider API Key 管理
+- 操作模式 + 预设配置文件
+
+**设置系统** (`settings.rs`):
+- JSON 格式持久化设置
+- 双层合并: 项目 `.claude/settings.json` 覆盖用户 `~/.config/rustcc/settings.json`
+- 权限白名单/黑名单持久化
+- Hook 定义 (PreToolUse / PostToolUse / SessionStart / SessionStop)
+
+**会话历史** (`history.rs`):
+- JSON 格式会话持久化
+- 支持保存/加载/导出/导入/删除
 
 ## 4. 关键设计模式
 
 ### 4.1 依赖方向
 ```
 main → cli + session + storage
-session → agent + llm + tools
-agent → llm + tools
-tui → agent (AgentEvent)
-tools → llm (ToolDefinition)
+session → agent + llm + tools + settings
+agent → llm + tools + planner
+tui → agent (AgentEvent) + settings
+tools → services (lsp, mcp)
 ```
 
 ### 4.2 异步模型
@@ -205,6 +283,8 @@ tools → llm (ToolDefinition)
 - `tokio::spawn`: 后台 Agent 任务
 - `tokio::spawn_blocking`: Shell 命令执行
 - `tokio::sync::mpsc`: TUI ↔ Agent 通信
+- `tokio::sync::Mutex`: LSP 客户端共享状态
+- `tokio::process::Command`: MCP/LSP 子进程管理
 
 ### 4.3 错误处理
 - `anyhow::Error`: 应用层，灵活错误链
@@ -216,7 +296,7 @@ tools → llm (ToolDefinition)
 ### 开发构建
 ```bash
 cargo build                # Debug (opt-level=1)
-cargo test                 # 运行全部 30 个测试
+cargo test                 # 运行全部 50 个测试
 cargo clippy               # Lint 检查
 ```
 
@@ -236,14 +316,17 @@ cargo build --release
 ```
 
 ### 测试覆盖
-| 模块 | 测试数 |
-|------|--------|
-| model_router | 7 |
-| rag | 8 |
-| permission | 8 |
-| context | 6 |
-| config | 1 |
-| **总计** | **30** |
+| 模块 | 测试数 | 内容 |
+|------|--------|------|
+| model_router | 7 | 复杂度判定、模型路由 |
+| rag | 8 | 索引、搜索、tokenization |
+| permission | 8 | 允许/确认/拒绝/路径过滤 |
+| context | 6 | 压缩、估算、系统消息保留 |
+| mcp | 6 | 请求构建、响应解析 |
+| settings | 4 | 合并、去重、路径 |
+| task | 5 | CRUD 操作 |
+| token_counter | 5 | 各模型估算 |
+| **总计** | **50** | |
 
 ## 6. 扩展指南
 
@@ -265,11 +348,15 @@ cargo build --release
 2. 在 `src/tui/app.rs` 的 `draw_ui()` 中调用
 3. 更新 `App` 状态结构
 
+### 添加新的 LSP 语言支持
+1. 在 `src/services/lsp.rs` 的 `get_handle()` 中添加语言匹配
+2. 配置对应语言服务器命令和参数
+
 ## 7. 依赖说明
 
 | 依赖 | 用途 |
 |------|------|
-| tokio | 异步运行时 |
+| tokio | 异步运行时 + 进程管理 |
 | ratatui + crossterm | TUI 界面 |
 | reqwest | HTTP 客户端 |
 | clap | CLI 参数解析 |
@@ -278,7 +365,7 @@ cargo build --release
 | async-trait | async trait 支持 |
 | regex | 正则搜索 |
 | glob | 文件匹配 |
-| uuid | 会话/子代理 ID |
+| uuid | 会话/子代理/任务 ID |
 | chrono | 时间戳 |
 | dirs | 系统目录 |
 | tracing | 结构化日志 |
