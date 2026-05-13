@@ -1,4 +1,4 @@
-# RustCC — AI Agent CLI
+# Aide — AI Agent CLI
 
 A high-performance, modular AI Agent CLI tool built in Rust. Supports multiple LLM backends, interactive TUI, and comprehensive tool-based agent execution for software engineering tasks.
 
@@ -26,23 +26,23 @@ A high-performance, modular AI Agent CLI tool built in Rust. Supports multiple L
 
 ```bash
 # Clone and build
-git clone https://github.com/your-org/rustcc.git
-cd rustcc
+git clone https://github.com/your-org/aide.git
+cd aide
 cargo build --release
 
-# The binary is at target/release/rustcc
+# The binary is at target/release/aide
 ```
 
 ### Configure
 
 ```bash
 # Initialize default configuration
-rustcc config init
+aide config init
 
 # Config is at:
-#   Linux:   ~/.config/rustcc/config.toml
-#   macOS:   ~/Library/Application Support/rustcc/config.toml
-#   Windows: %APPDATA%/rustcc/config.toml
+#   Linux:   ~/.config/aide/config.toml
+#   macOS:   ~/Library/Application Support/aide/config.toml
+#   Windows: %APPDATA%/aide/config.toml
 ```
 
 Edit the config to add your API keys:
@@ -78,25 +78,25 @@ profile = "cloud-max"        # Maximum cloud capability
 
 ```bash
 # Start interactive TUI session (default)
-rustcc
+aide
 
 # Start with specific provider and model
-rustcc -p anthropic -m claude-sonnet-4-6 chat
+aide -p anthropic -m claude-sonnet-4-6 chat
 
 # Single-shot query
-rustcc run "explain the error handling in src/main.rs"
+aide run "explain the error handling in src/main.rs"
 
 # Index code for RAG search
-rustcc rag index
+aide rag index
 
 # View available tools
-rustcc tools
+aide tools
 
 # Manage session history
-rustcc history
+aide history
 
 # List MCP servers
-rustcc mcp list
+aide mcp list
 ```
 
 ### TUI Controls
@@ -149,7 +149,7 @@ src/
 ```bash
 cargo test                    # All tests
 cargo test -- --nocapture     # With output
-cargo test -p rustcc agent    # Specific module
+cargo test -p aide agent    # Specific module
 ```
 
 ## Release Build

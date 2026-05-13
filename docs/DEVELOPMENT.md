@@ -1,8 +1,8 @@
-# RustCC 开发文档
+# Aide 开发文档
 
 ## 1. 项目概述
 
-RustCC 是一个用 Rust 实现的高性能、模块化 AI Agent CLI 工具。借鉴 Claude Code 的核心设计模式，支持多种 LLM 后端，提供交互式 TUI 终端体验和完整的 Agent 工具调用系统。
+Aide 是一个用 Rust 实现的高性能、模块化 AI Agent CLI 工具。借鉴 Claude Code 的核心设计模式，支持多种 LLM 后端，提供交互式 TUI 终端体验和完整的 Agent 工具调用系统。
 
 **技术栈**: Rust 1.95 + tokio + ratatui + reqwest + clap
 **代码规模**: 45 个源文件，约 8000 行代码，20 个依赖
@@ -120,7 +120,7 @@ pub enum AgentEvent {
 - 四类记忆: User / Feedback / Project / Reference
 - 文件存储: YAML frontmatter 的 .md 文件
 - MEMORY.md 索引
-- 项目级 (`.claude/memory/`) 和用户级 (`~/.config/rustcc/memory/`) 双路径
+- 项目级 (`.claude/memory/`) 和用户级 (`~/.config/aide/memory/`) 双路径
 
 ### 3.3 工具系统 (`src/tools/`)
 
@@ -161,7 +161,7 @@ pub trait Tool: Send + Sync {
 2. **Confirm**: 高影响操作需用户确认（TUI 弹窗含 diff 预览）
 3. **Deny**: 黑名单工具 + 路径排除
 
-权限持久化通过 settings.json: 项目级 `.claude/settings.json` 覆盖用户级 `~/.config/rustcc/settings.json`。
+权限持久化通过 settings.json: 项目级 `.claude/settings.json` 覆盖用户级 `~/.config/aide/settings.json`。
 
 **斜杠命令** (TUI 内):
 | 命令 | 功能 |
@@ -199,7 +199,7 @@ src/tui/
 **布局**:
 ```
 ┌──────────────────────────────────────────────┐
-│  RustCC | provider | model     tokens | turns │  ← 状态栏
+│  Aide | provider | model     tokens | turns │  ← 状态栏
 ├──────────────────────────────────────────────┤
 │  用户: 请帮我优化错误处理                      │  ← 消息区
 │                                              │     (可滚动)
@@ -241,7 +241,7 @@ TUI (主线程)  ←──event_rx──   Agent Task (后台)
 - JSON-RPC 2.0 over stdio
 - 真实子进程管理 (tokio::process::Command)
 - 生命周期: spawn → initialize → initialized 通知 → tools/list → tools/call
-- 服务器配置持久化 (`~/.config/rustcc/mcp_servers.json`)
+- 服务器配置持久化 (`~/.config/aide/mcp_servers.json`)
 - 优雅关闭 (kill_on_drop)
 
 **LSP 客户端** (`lsp.rs`):
@@ -259,7 +259,7 @@ TUI (主线程)  ←──event_rx──   Agent Task (后台)
 
 **设置系统** (`settings.rs`):
 - JSON 格式持久化设置
-- 双层合并: 项目 `.claude/settings.json` 覆盖用户 `~/.config/rustcc/settings.json`
+- 双层合并: 项目 `.claude/settings.json` 覆盖用户 `~/.config/aide/settings.json`
 - 权限白名单/黑名单持久化
 - Hook 定义 (PreToolUse / PostToolUse / SessionStart / SessionStop)
 
