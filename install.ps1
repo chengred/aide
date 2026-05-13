@@ -5,7 +5,7 @@ param(
     [switch]$BuildFromSource  # 强制从源码编译
 )
 
-$repo = "your-org/aide"
+$repo = "chengred/aide"
 $version = "latest"
 $binDir = "$env:USERPROFILE\.cargo\bin"
 $binPath = "$binDir\aide.exe"

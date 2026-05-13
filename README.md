@@ -21,19 +21,19 @@
 
 **方式1：下载预编译二进制（推荐，无需装 Rust）**
 
-从 [Releases](https://github.com/your-org/aide/releases) 下载对应平台的二进制：
+从 [Releases](https://github.com/chengred/aide/releases) 下载对应平台的二进制：
 ```powershell
 # Windows PowerShell
-Invoke-WebRequest -Uri "https://github.com/your-org/aide/releases/latest/download/aide-windows.exe" -OutFile "$env:USERPROFILE\.cargo\bin\aide.exe"
+Invoke-WebRequest -Uri "https://github.com/chengred/aide/releases/latest/download/aide-windows.exe" -OutFile "$env:USERPROFILE\.cargo\bin\aide.exe"
 ```
 ```bash
 # Linux
-curl -L https://github.com/your-org/aide/releases/latest/download/aide-linux -o ~/.cargo/bin/aide
+curl -L https://github.com/chengred/aide/releases/latest/download/aide-linux -o ~/.cargo/bin/aide
 chmod +x ~/.cargo/bin/aide
 ```
 ```bash
 # macOS
-curl -L https://github.com/your-org/aide/releases/latest/download/aide-macos -o ~/.cargo/bin/aide
+curl -L https://github.com/chengred/aide/releases/latest/download/aide-macos -o ~/.cargo/bin/aide
 chmod +x ~/.cargo/bin/aide
 ```
 
@@ -46,7 +46,7 @@ cargo install aide-cli
 **方式3：从源码安装（需装 Rust）**
 
 ```bash
-git clone https://github.com/your-org/aide.git
+git clone https://github.com/chengred/aide.git
 cd aide
 .\install.ps1          # Windows
 # 或 cargo install --path .
