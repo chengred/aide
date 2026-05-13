@@ -5,6 +5,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
     Frame,
 };
+use unicode_width::UnicodeWidthStr;
 
 use crate::agent::ConfirmationType;
 use crate::tui::app::{App, InputMode};
@@ -26,12 +27,16 @@ pub fn draw_input(f: &mut Frame, area: Rect, app: &App) {
 
     let cursor_pos = app.cursor_pos.min(app.input.chars().count());
     let input_text = if app.input.is_empty() && app.input_mode != InputMode::Processing {
-        "(type your message, Enter to send, Ctrl+C to quit)".to_string()
+        "输入消息，Enter 发送，Ctrl+C 退出".to_string()
     } else if app.input_mode == InputMode::Processing {
-        "(agent is processing... Esc to cancel)".to_string()
+        "Agent 处理中... Esc 取消".to_string()
     } else {
         app.input.clone()
     };
+
+    // Compute cursor column position before input_text is moved
+    let before_chars: String = input_text.chars().take(cursor_pos).collect();
+    let cursor_x = ("> ".width() + before_chars.width()) as u16;
 
     let text = if cursor_pos < input_text.chars().count() && app.input_mode == InputMode::Normal {
         let chars: Vec<char> = input_text.chars().collect();
@@ -63,9 +68,8 @@ pub fn draw_input(f: &mut Frame, area: Rect, app: &App) {
 
     f.render_widget(paragraph, area);
 
-    // Set cursor position
+    // Set cursor position (account for wide characters)
     if app.input_mode == InputMode::Normal {
-        let cursor_x = 2 + cursor_pos as u16; // "> " + text before cursor
         f.set_cursor_position((cursor_x, area.y + 1));
     }
 }

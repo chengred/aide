@@ -49,7 +49,7 @@ impl Default for GeneralConfig {
             default_provider: ProviderType::DeepSeek,
             default_model: "deepseek-chat".into(),
             system_prompt: Some(
-                "You are a helpful AI coding assistant. You help users with software engineering tasks."
+                "你是一个专业的 AI 编程助手。你帮助用户完成软件工程任务。"
                     .into(),
             ),
             max_conversation_turns: 100,
@@ -151,7 +151,6 @@ impl Config {
             let content = std::fs::read_to_string(&path)?;
             let mut config: Config = toml::from_str(&content)?;
 
-            // Apply profile presets if set
             let profile_name = config.profile.clone();
             if let Some(profile) = profile_name {
                 config.apply_profile(&profile);
@@ -159,12 +158,13 @@ impl Config {
 
             Ok(config)
         } else {
-            // No config found — create default at the most local writable location
-            let save_path = find_or_create_config_dir(custom_path)?;
-            let config = Config::default();
-            save_to(&config, &save_path)?;
-            Ok(config)
+            Err(ConfigError::NotFound("No config file found. Run 'rustcc cfg init' to create one.".into()))
         }
+    }
+
+    /// Check if a config file exists without loading
+    pub fn exists(custom_path: Option<&str>) -> bool {
+        find_config_path(custom_path).map(|p| p.exists()).unwrap_or(false)
     }
 
     /// Save config — writes to custom path if specified, else global path
@@ -181,7 +181,7 @@ impl Config {
                 self.general.default_provider = ProviderType::DeepSeek;
                 self.general.default_model = "deepseek-chat".into();
                 self.general.system_prompt = Some(
-                    "You are a helpful AI coding assistant powered by DeepSeek.".into()
+                    "你是一个专业的 AI 编程助手，由 DeepSeek 驱动。".into()
                 );
             }
             "openai" => {
@@ -190,7 +190,7 @@ impl Config {
                 self.general.default_model = "gpt-4o".into();
                 self.general.token_budget = Some(200_000);
                 self.general.system_prompt = Some(
-                    "You are a helpful AI coding assistant powered by OpenAI.".into()
+                    "你是一个专业的 AI 编程助手，由 OpenAI 驱动。".into()
                 );
             }
             "anthropic" => {
@@ -198,7 +198,7 @@ impl Config {
                 self.general.default_provider = ProviderType::Anthropic;
                 self.general.default_model = "claude-sonnet-4-6".into();
                 self.general.system_prompt = Some(
-                    "You are a helpful AI coding assistant powered by Anthropic Claude.".into()
+                    "你是一个专业的 AI 编程助手，由 Anthropic Claude 驱动。".into()
                 );
             }
             "privacy-first" => {
@@ -210,7 +210,7 @@ impl Config {
                 self.providers.deepseek = None;
                 self.tools.require_approval = vec!["bash".into(), "run".into(), "write".into(), "edit".into()];
                 self.general.system_prompt = Some(
-                    "You are a privacy-first AI coding assistant running fully offline. Your data never leaves this machine.".into()
+                    "你是一个注重隐私的 AI 编程助手，完全离线运行。你的数据不会离开本机。".into()
                 );
             }
             "cloud-max" => {
@@ -219,7 +219,7 @@ impl Config {
                 self.general.default_model = "gpt-4o".into();
                 self.general.token_budget = Some(200_000);
                 self.general.system_prompt = Some(
-                    "You are a powerful AI coding assistant with access to cloud models for maximum capability.".into()
+                    "你是一个强大的 AI 编程助手，可使用云端模型获得最大能力。".into()
                 );
             }
             _ => {}

@@ -1,18 +1,18 @@
 use clap::{Parser, Subcommand};
 
-/// RustCC - A high-performance, modular AI Agent CLI tool
+/// RustCC - 高性能模块化 AI Agent CLI 工具
 #[derive(Parser, Debug)]
 #[command(name = "rustcc", version, about, long_about = None)]
 pub struct Cli {
-    /// Configuration file path
+    /// 配置文件路径
     #[arg(short, long, global = true)]
     pub config: Option<String>,
 
-    /// Model provider to use (openai, anthropic, deepseek, ollama)
+    /// 模型提供商 (openai, anthropic, deepseek, ollama)
     #[arg(short, long, global = true)]
     pub provider: Option<String>,
 
-    /// Model name to use
+    /// 模型名称
     #[arg(short, long, global = true)]
     pub model: Option<String>,
 
@@ -22,67 +22,75 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Start interactive chat session
+    /// 启动交互式对话 (TUI)
+    #[command(alias = "chat")]
     Chat {
-        /// Initial prompt to send immediately
+        /// 初始提示词
         prompt: Option<String>,
     },
 
-    /// Run a single prompt and exit
+    /// 单次查询
+    #[command(alias = "run")]
     Run {
-        /// The prompt to run
+        /// 提示词
         prompt: String,
 
-        /// Output format
+        /// 输出格式
         #[arg(short, long, default_value = "text")]
         output: String,
     },
 
-    /// Manage configuration
-    Config {
+    /// 配置管理
+    #[command(alias = "config")]
+    Cfg {
         #[command(subcommand)]
         action: Option<ConfigAction>,
     },
 
-    /// Show available models
-    Models,
+    /// 查看可用模型
+    #[command(alias = "models")]
+    List,
 
-    /// Show available tools
-    Tools,
+    /// 查看可用工具
+    #[command(alias = "tools")]
+    Tool,
 
-    /// Session history management
-    History {
-        /// Action: list, <id>, load:<id>
+    /// 会话历史管理
+    #[command(alias = "history")]
+    Hist {
+        /// 操作: list, <id>, load:<id>
         action: Option<String>,
     },
 
-    /// RAG code retrieval
+    /// 代码检索 (RAG)
+    #[command(alias = "rag")]
     Rag {
-        /// Action: index, search
+        /// 操作: index, search
         action: Option<String>,
-        /// Path or query
+        /// 路径或搜索词
         path: Option<String>,
     },
 
-    /// MCP server management
+    /// MCP 服务器管理
+    #[command(alias = "mcp")]
     Mcp {
-        /// Action: list
+        /// 操作: list
         action: Option<String>,
     },
 }
 
 #[derive(Subcommand, Debug)]
 pub enum ConfigAction {
-    /// Show current configuration
+    /// 显示当前配置
     Show,
-    /// Set a configuration value
+    /// 设置配置项
     Set {
         key: String,
         value: String,
     },
-    /// Initialize configuration with defaults
+    /// 初始化默认配置
     Init {
-        /// Create config in current directory instead of global
+        /// 在当前目录创建配置（而非全局目录）
         #[arg(short, long)]
         local: bool,
     },

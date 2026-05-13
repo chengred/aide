@@ -80,9 +80,9 @@ impl Default for AgentConfig {
     fn default() -> Self {
         Self {
             max_turns: 100,
-            system_prompt: "You are a helpful AI coding assistant. You help users with software engineering tasks. \
-                You have access to tools for reading, writing, editing, and searching files, as well as executing shell commands. \
-                Use tools when appropriate and explain your reasoning clearly."
+            system_prompt: "你是一个专业的 AI 编程助手。你帮助用户完成软件工程任务。\
+                你可以使用工具来读取、写入、编辑、搜索文件，以及执行 Shell 命令。\
+                在适当的时候使用工具，并清晰地解释你的思路。"
                 .into(),
             temperature: 0.7,
             max_tokens: 4096,

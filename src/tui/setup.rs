@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::io;
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
