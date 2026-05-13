@@ -37,17 +37,23 @@ async fn main() -> Result<(), anyhow::Error> {
             session2.run_tui().await?;
         }
         Some(Commands::Config { action }) => {
-            let mut config = storage::config::Config::load()?;
             match action {
                 Some(cli::ConfigAction::Show) | None => {
+                    let config = storage::config::Config::load(cli.config.as_deref())?;
                     let toml_str = toml::to_string_pretty(&config)?;
                     println!("{}", toml_str);
                 }
-                Some(cli::ConfigAction::Init) => {
-                    config = storage::config::Config::default();
-                    config.save()?;
-                    println!("Configuration initialized with defaults.");
-                    println!("Config file: {}", dirs::config_dir().unwrap().join("rustcc").join("config.toml").display());
+                Some(cli::ConfigAction::Init { local }) => {
+                    let config = storage::config::Config::default();
+                    if *local {
+                        config.save()?;
+                        println!("Configuration created: rustcc.toml (current directory)");
+                    } else {
+                        config.save_global()?;
+                        println!("Configuration created: {}",
+                            dirs::config_dir().unwrap().join("rustcc").join("config.toml").display());
+                    }
+                    println!("Edit the file to add your API key, then run rustcc.");
                 }
                 Some(cli::ConfigAction::Set { .. }) => {
                     println!("Use 'rustcc config init' to create a default config, then edit it directly.");
@@ -163,12 +169,16 @@ async fn main() -> Result<(), anyhow::Error> {
         }
         None => {
             // Check if config exists; if not, run setup wizard on first launch
-            let config_path = dirs::config_dir()
-                .unwrap_or_default()
-                .join("rustcc")
-                .join("config.toml");
+            let config_exists = storage::config::Config::load(cli.config.as_deref()).is_ok()
+                || std::path::Path::new("rustcc.toml").exists()
+                || std::path::Path::new("config.toml").exists()
+                || dirs::config_dir()
+                    .unwrap_or_default()
+                    .join("rustcc")
+                    .join("config.toml")
+                    .exists();
 
-            if !config_path.exists() {
+            if !config_exists {
                 match tui::run_setup()? {
                     Some(config) => {
                         config.save()?;

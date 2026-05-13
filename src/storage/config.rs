@@ -140,9 +140,13 @@ impl Default for UiConfig {
 }
 
 impl Config {
-    /// Load config from the default path
-    pub fn load() -> Result<Self, ConfigError> {
-        let path = config_path()?;
+    /// Load config, checking multiple paths in order:
+    /// 1. Custom path (from -c flag)
+    /// 2. ./rustcc.toml in current directory
+    /// 3. ./config.toml in current directory
+    /// 4. Global %APPDATA%/rustcc/config.toml
+    pub fn load(custom_path: Option<&str>) -> Result<Self, ConfigError> {
+        let path = find_config_path(custom_path)?;
         if path.exists() {
             let content = std::fs::read_to_string(&path)?;
             let mut config: Config = toml::from_str(&content)?;
@@ -155,10 +159,18 @@ impl Config {
 
             Ok(config)
         } else {
+            // No config found — create default at the most local writable location
+            let save_path = find_or_create_config_dir(custom_path)?;
             let config = Config::default();
-            config.save()?;
+            save_to(&config, &save_path)?;
             Ok(config)
         }
+    }
+
+    /// Save config — writes to custom path if specified, else global path
+    pub fn save_to_path(&self, custom_path: Option<&str>) -> Result<(), ConfigError> {
+        let path = find_or_create_config_dir(custom_path)?;
+        save_to(self, &path)
     }
 
     /// Apply a named profile preset
@@ -226,16 +238,15 @@ impl Config {
         matches!(self.mode, Some(OperationMode::Local))
     }
 
-    /// Save config to the default path
-    #[allow(dead_code)]
+    /// Save config to the default path (current dir rustcc.toml)
     pub fn save(&self) -> Result<(), ConfigError> {
-        let path = config_path()?;
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let content = toml::to_string_pretty(self)?;
-        std::fs::write(&path, content)?;
-        Ok(())
+        self.save_to_path(None)
+    }
+
+    /// Save config to the global path
+    pub fn save_global(&self) -> Result<(), ConfigError> {
+        let path = config_dir_path()?;
+        save_to(self, &path)
     }
 
     /// Get the API key for a given provider
@@ -282,10 +293,64 @@ impl Config {
     }
 }
 
-fn config_path() -> Result<PathBuf, ConfigError> {
+/// Search for an existing config file, checking:
+/// 1. Custom path (from -c flag)
+/// 2. ./rustcc.toml
+/// 3. ./config.toml
+/// 4. Global %APPDATA%/rustcc/config.toml
+fn find_config_path(custom: Option<&str>) -> Result<PathBuf, ConfigError> {
+    if let Some(path) = custom {
+        let p = PathBuf::from(path);
+        if p.exists() {
+            return Ok(p);
+        }
+        return Err(ConfigError::NotFound(format!("Config not found: {}", path)));
+    }
+
+    // Check local files
+    for local in &["rustcc.toml", "config.toml"] {
+        let p = PathBuf::from(local);
+        if p.exists() {
+            return Ok(p);
+        }
+    }
+
+    // Fall back to global
+    let global = dirs::config_dir()
+        .ok_or_else(|| ConfigError::NotFound("config directory not found".into()))?
+        .join("rustcc")
+        .join("config.toml");
+    Ok(global)
+}
+
+/// Find where to write a new config:
+/// 1. Custom path (directory must exist or be creatable)
+/// 2. Current directory (prefer ./rustcc.toml)
+/// 3. Global config dir
+fn find_or_create_config_dir(custom: Option<&str>) -> Result<PathBuf, ConfigError> {
+    if let Some(path) = custom {
+        let p = PathBuf::from(path);
+        if let Some(parent) = p.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        return Ok(p);
+    }
+    Ok(PathBuf::from("rustcc.toml"))
+}
+
+fn config_dir_path() -> Result<PathBuf, ConfigError> {
     let dir = dirs::config_dir()
         .ok_or_else(|| ConfigError::NotFound("config directory not found".into()))?;
     Ok(dir.join("rustcc").join("config.toml"))
+}
+
+fn save_to(config: &Config, path: &PathBuf) -> Result<(), ConfigError> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let content = toml::to_string_pretty(config)?;
+    std::fs::write(path, content)?;
+    Ok(())
 }
 
 #[derive(Debug, thiserror::Error)]

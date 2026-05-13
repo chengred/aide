@@ -34,7 +34,7 @@ pub struct Session {
 
 impl Session {
     pub fn new(cli: &Cli) -> Result<Self, anyhow::Error> {
-        let config = Config::load()?;
+        let config = Config::load(cli.config.as_deref())?;
 
         let provider_type = cli
             .provider

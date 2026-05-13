@@ -81,5 +81,9 @@ pub enum ConfigAction {
         value: String,
     },
     /// Initialize configuration with defaults
-    Init,
+    Init {
+        /// Create config in current directory instead of global
+        #[arg(short, long)]
+        local: bool,
+    },
 }
